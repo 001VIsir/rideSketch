@@ -3,8 +3,11 @@ package org.example.ridesketch.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.ridesketch.common.Result;
+import org.example.ridesketch.dto.AIRoutePlanningRequest;
+import org.example.ridesketch.dto.AIRoutePlanningResult;
 import org.example.ridesketch.dto.RoutePlanningRequest;
 import org.example.ridesketch.dto.RoutePlanningResult;
+import org.example.ridesketch.service.AIRouteService;
 import org.example.ridesketch.service.RouteService;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class RouteController {
 
     private final RouteService routeService;
+    private final AIRouteService aiRouteService;
 
     /**
      * 路线规划
@@ -71,6 +75,24 @@ public class RouteController {
             @RequestParam(required = false) String waypoints) {
         log.info("步行路线规划请求: origin={}, destination={}, waypoints={}", origin, destination, waypoints);
         RoutePlanningResult result = routeService.planWalkingRoute(origin, destination, waypoints);
+        return Result.success(result);
+    }
+
+    /**
+     * AI智能路线规划
+     *
+     * @param request AI路线规划请求
+     * @return AI路线规划结果
+     */
+    @PostMapping("/ai-plan")
+    public Result<AIRoutePlanningResult> planAIRoute(@RequestBody AIRoutePlanningRequest request) {
+        log.info("AI智能路线规划请求: {}", request.getDescription());
+
+        if (request.getDescription() == null || request.getDescription().isBlank()) {
+            return Result.error("请输入路线描述");
+        }
+
+        AIRoutePlanningResult result = aiRouteService.planAIRoute(request);
         return Result.success(result);
     }
 }
