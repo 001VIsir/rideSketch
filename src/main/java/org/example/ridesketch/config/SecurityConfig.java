@@ -42,10 +42,11 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/auth/**",
-                                "/api/public/**",
-                                "/error"
-                        ).permitAll()
+                        "/api/auth/**",
+                        "/api/map/**",
+                        "/api/public/**",
+                        "/error"
+                ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
