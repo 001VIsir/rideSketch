@@ -6,7 +6,7 @@
         <el-skeleton :rows="10" animated />
       </div>
 
-      <template v-else-if="route">
+      <template v-else-if="routeDetail">
         <!-- 返回按钮 -->
         <div class="back-bar">
           <el-button :icon="Back" @click="handleBack">返回</el-button>
@@ -30,27 +30,27 @@
         <el-card class="route-card">
           <template #header>
             <div class="card-header">
-              <span class="route-title">{{ route.title }}</span>
-              <el-tag>{{ route.city }}</el-tag>
+              <span class="route-title">{{ routeDetail?.title }}</span>
+              <el-tag>{{ routeDetail?.city }}</el-tag>
             </div>
           </template>
 
           <div class="route-stats">
             <div class="stat-item">
               <span class="stat-label">距离</span>
-              <span class="stat-value">{{ formatDistance(route.distance) }}</span>
+              <span class="stat-value">{{ formatDistance(routeDetail?.distance || 0) }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">时长</span>
-              <span class="stat-value">{{ formatDuration(route.duration) }}</span>
+              <span class="stat-value">{{ formatDuration(routeDetail?.duration || 0) }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">作者</span>
-              <span class="stat-value">{{ route.authorName }}</span>
+              <span class="stat-value">{{ routeDetail?.authorName }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">发布时间</span>
-              <span class="stat-value">{{ route.createTime }}</span>
+              <span class="stat-value">{{ routeDetail?.createTime }}</span>
             </div>
           </div>
 
@@ -58,7 +58,7 @@
 
           <div class="route-description">
             <h4>路线描述</h4>
-            <p>{{ route.description }}</p>
+            <p>{{ routeDetail?.description }}</p>
           </div>
         </el-card>
 
@@ -70,7 +70,7 @@
               :icon="Star"
               @click="handleLike"
             >
-              {{ liked ? '已赞' : '点赞' }} ({{ route.likes }})
+              {{ liked ? '已赞' : '点赞' }} ({{ routeDetail?.likes }})
             </el-button>
           </div>
         </el-card>
@@ -140,12 +140,12 @@ import { getRouteDetail, likeRoute, unlikeRoute, getComments, postComment, delet
 import { getToken } from '@/api/user'
 
 const router = useRouter()
-const route = useRoute()
+const routeParams = useRoute()
 
 // 状态
 const loading = ref(true)
 const routeId = ref<number>(0)
-const route = ref<RouteDetail | null>(null)
+const routeDetail = ref<RouteDetail | null>(null)
 const comments = ref<CommentInfo[]>([])
 const liked = ref(false)
 const newComment = ref('')
@@ -159,7 +159,7 @@ const currentUserId = computed(() => {
 
 // 是否是作者
 const isAuthor = computed(() => {
-  if (!route.value) return false
+  if (!routeDetail.value) return false
   // 实际应该比对当前用户ID
   return false
 })
@@ -187,9 +187,9 @@ function formatDuration(seconds: number): string {
 async function loadRouteDetail() {
   loading.value = true
   try {
-    const id = parseInt(route.params.id as string)
+    const id = parseInt(routeParams.params.id as string)
     routeId.value = id
-    route.value = await getRouteDetail(id)
+    routeDetail.value = await getRouteDetail(id)
   } catch (error) {
     console.error('加载路线详情失败:', error)
     ElMessage.error('加载失败，请稍后重试')
@@ -220,11 +220,11 @@ async function handleLike() {
     if (liked.value) {
       await unlikeRoute(routeId.value)
       liked.value = false
-      if (route.value) route.value.likes--
+      if (routeDetail.value) routeDetail.value.likes--
     } else {
       await likeRoute(routeId.value)
       liked.value = true
-      if (route.value) route.value.likes++
+      if (routeDetail.value) routeDetail.value.likes++
     }
   } catch (error) {
     console.error('操作失败:', error)
@@ -252,7 +252,7 @@ async function handlePostComment() {
     comments.value.push(comment)
     newComment.value = ''
     ElMessage.success('评论成功')
-    if (route.value) route.value.comments++
+    if (routeDetail.value) routeDetail.value.comments++
   } catch (error) {
     console.error('评论失败:', error)
     ElMessage.error('评论失败，请稍后重试')
@@ -271,7 +271,7 @@ async function handleDeleteComment(commentId: number) {
     await deleteComment(routeId.value, commentId)
     comments.value = comments.value.filter(c => c.id !== commentId)
     ElMessage.success('删除成功')
-    if (route.value) route.value.comments--
+    if (routeDetail.value) routeDetail.value.comments--
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('删除失败:', error)

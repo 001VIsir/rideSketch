@@ -1,4 +1,32 @@
-import request from './user'
+import axios from 'axios'
+
+const API_BASE_URL = 'http://localhost:8080/api'
+
+const request = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+})
+
+// 请求拦截器 - 添加 token
+request.interceptors.request.use((config) => {
+  const token = localStorage.getItem('ridesketch_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// 响应拦截器 - 处理 token 过期
+request.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('ridesketch_token')
+      window.location.href = '/'
+    }
+    return Promise.reject(error)
+  }
+)
 
 // 路线基本信息
 export interface RouteBasicInfo {
