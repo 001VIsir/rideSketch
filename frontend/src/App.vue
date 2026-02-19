@@ -20,6 +20,10 @@ function goToLogin() {
   router.push('/login')
 }
 
+function goToPattern() {
+  router.push('/pattern')
+}
+
 function handleLogout() {
   import('@/api/user').then(({ logout }) => {
     logout()
@@ -43,6 +47,13 @@ function handleLogout() {
           @click="goToMap"
         >
           地图
+        </a>
+        <a
+          class="nav-link"
+          :class="{ active: route.path === '/pattern' }"
+          @click="goToPattern"
+        >
+          图案路书
         </a>
         <a
           v-if="isLoggedIn"
