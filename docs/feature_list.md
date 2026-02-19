@@ -253,5 +253,10 @@ api/
 
 ### T001 - Spring AI 升级
 - **描述**: 使用Spring AI框架重构AI服务，引入Function Calling和RAG能力
-- **状态**: 规划中
+- **状态**: ✅ 已完成
+- **内容**:
+  - 添加Spring AI依赖 (spring-ai-ollama-spring-boot-starter)
+  - 创建AIConfig配置类
+  - 重构AIRouteServiceImpl使用Spring AI ChatClient
+  - 修改Maven settings.xml以支持Spring Milestones仓库
 - **优先级**: 中
