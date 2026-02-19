@@ -81,3 +81,37 @@ export interface MapConfig {
   pitch?: number
   rotation?: number
 }
+
+// 路线点
+export interface RoutePoint {
+  lng: number
+  lat: number
+  name?: string
+}
+
+// 路线步骤
+export interface RouteStep {
+  instruction: string
+  distance: string
+  duration: string
+  road: string
+  orientation: string
+  path: string[]
+}
+
+// 路线路径
+export interface RoutePath {
+  distance: string
+  duration: string
+  strategy: string
+  steps: RouteStep[]
+  path: [number, number][]
+}
+
+// 路线信息
+export interface RouteData {
+  origin: string
+  destination: string
+  waypoints: string
+  paths: RoutePath[]
+}

@@ -178,3 +178,249 @@ export default {
   reGeocode,
   placeSearch,
 }
+
+// 标记实例缓存
+let startMarker: any = null
+let endMarker: any = null
+let waypointMarkers: any[] = []
+let routePolylines: any[] = []
+
+/**
+ * 创建起点标记
+ */
+export async function createStartMarker(lng: number, lat: number, name?: string): Promise<any> {
+  const AMap = await loadAMap()
+
+  // 清除已有起点标记
+  if (startMarker) {
+    mapInstance.remove(startMarker)
+  }
+
+  const markerContent = `
+    <div class="amap-marker-start">
+      <div class="marker-icon">A</div>
+      <div class="marker-label">起点</div>
+    </div>
+  `
+
+  startMarker = new AMap.Marker({
+    position: [lng, lat],
+    title: name || '起点',
+    content: markerContent,
+    offset: new AMap.Pixel(-15, -30),
+  })
+
+  mapInstance.add(startMarker)
+  return startMarker
+}
+
+/**
+ * 创建终点标记
+ */
+export async function createEndMarker(lng: number, lat: number, name?: string): Promise<any> {
+  const AMap = await loadAMap()
+
+  // 清除已有终点标记
+  if (endMarker) {
+    mapInstance.remove(endMarker)
+  }
+
+  const markerContent = `
+    <div class="amap-marker-end">
+      <div class="marker-icon">B</div>
+      <div class="marker-label">终点</div>
+    </div>
+  `
+
+  endMarker = new AMap.Marker({
+    position: [lng, lat],
+    title: name || '终点',
+    content: markerContent,
+    offset: new AMap.Pixel(-15, -30),
+  })
+
+  mapInstance.add(endMarker)
+  return endMarker
+}
+
+/**
+ * 途经点标记
+ */
+export async function createWaypointMarker(lng: number, lat: number, index: number): Promise<any> {
+  const AMap = await loadAMap()
+
+  const markerContent = `
+    <div class="amap-marker-waypoint">
+      <div class="marker-icon">${index + 1}</div>
+    </div>
+  `
+
+  const marker = new AMap.Marker({
+    position: [lng, lat],
+    title: `途经点${index + 1}`,
+    content: markerContent,
+    offset: new AMap.Pixel(-10, -10),
+  })
+
+  mapInstance.add(marker)
+  waypointMarkers.push(marker)
+  return marker
+}
+
+/**
+ * 绘制路线
+ */
+export async function drawRoute(path: [number, number][], color?: string): Promise<any> {
+  const AMap = await loadAMap()
+
+  // 清除已有路线
+  clearRoute()
+
+  if (!path || path.length === 0) {
+    return null
+  }
+
+  const polyline = new AMap.Polyline({
+    path: path,
+    strokeColor: color || '#409eff',
+    strokeWeight: 5,
+    strokeOpacity: 0.8,
+    strokeStyle: 'solid',
+    strokeDashArray: [10, 5],
+  })
+
+  mapInstance.add(polyline)
+  routePolylines.push(polyline)
+
+  // 自动调整视野
+  mapInstance.setFitView([polyline])
+
+  return polyline
+}
+
+/**
+ * 绘制多条路线（用于展示不同方案）
+ */
+export async function drawRoutes(paths: [number, number][], colors?: string[]): Promise<any[]> {
+  const defaultColors = ['#409eff', '#67c23a', '#e6a23c', '#f56c6c']
+  const polylines: any[] = []
+
+  // 清除已有路线
+  clearRoute()
+
+  for (let i = 0; i < paths.length; i++) {
+    const path = paths[i]
+    if (!path || path.length === 0) continue
+
+    const AMap = await loadAMap()
+    const color = colors?.[i] || defaultColors[i % defaultColors.length]
+
+    const polyline = new AMap.Polyline({
+      path: path,
+      strokeColor: color,
+      strokeWeight: 5,
+      strokeOpacity: 0.8,
+      strokeStyle: 'solid',
+    })
+
+    mapInstance.add(polyline)
+    polylines.push(polyline)
+    routePolylines.push(polyline)
+  }
+
+  // 调整视野
+  if (polylines.length > 0) {
+    mapInstance.setFitView(polylines)
+  }
+
+  return polylines
+}
+
+/**
+ * 清除路线
+ */
+export function clearRoute(): void {
+  // 清除路线
+  if (routePolylines.length > 0) {
+    mapInstance.remove(routePolylines)
+    routePolylines = []
+  }
+}
+
+/**
+ * 添加标记（简化接口）
+ * @param position 位置 [lng, lat]
+ * @param label 标签文字（A/B/数字等）
+ * @param title 标题
+ */
+export async function addMarker(position: [number, number], label?: string, title?: string): Promise<any> {
+  const AMap = await loadAMap()
+
+  // 创建标记内容
+  const content = label
+    ? `<div style="
+        width: 24px;
+        height: 24px;
+        background: ${label === 'A' ? '#409eff' : label === 'B' ? '#67c23a' : '#e6a23c'};
+        border-radius: 50%;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      ">${label}</div>`
+    : ''
+
+  const marker = new AMap.Marker({
+    position,
+    content,
+    title: title || '',
+    offset: label ? new AMap.Pixel(-12, -12) : new AMap.Pixel(-13, -30),
+  })
+
+  if (mapInstance) {
+    mapInstance.add(marker)
+  }
+
+  return marker
+}
+
+/**
+ * 清除所有标记和路线
+ */
+export function clearAllRouteMarkers(): void {
+  clearRoute()
+
+  // 清除起点
+  if (startMarker) {
+    mapInstance.remove(startMarker)
+    startMarker = null
+  }
+
+  // 清除终点
+  if (endMarker) {
+    mapInstance.remove(endMarker)
+    endMarker = null
+  }
+
+  // 清除途经点
+  if (waypointMarkers.length > 0) {
+    mapInstance.remove(waypointMarkers)
+    waypointMarkers = []
+  }
+}
+
+/**
+ * 解析路径字符串为坐标数组
+ */
+export function parsePathString(pathStr: string): [number, number][] {
+  if (!pathStr) return []
+
+  const points = pathStr.split(';')
+  return points.map((point) => {
+    const [lng, lat] = point.split(',').map(Number)
+    return [lng, lat]
+  }).filter((point) => !isNaN(point[0]) && !isNaN(point[1]))
+}
