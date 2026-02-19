@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.ridesketch.dto.AuthResponse;
 import org.example.ridesketch.dto.LoginRequest;
 import org.example.ridesketch.dto.RegisterRequest;
+import org.example.ridesketch.dto.UpdateUserRequest;
 import org.example.ridesketch.entity.User;
 import org.example.ridesketch.mapper.UserMapper;
 import org.example.ridesketch.security.JwtUtils;
@@ -14,6 +15,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -109,5 +111,43 @@ public class UserServiceImpl implements UserService {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("email", email);
         return userMapper.selectOne(queryWrapper);
+    }
+
+    @Override
+    public User findById(Long id) {
+        return userMapper.selectById(id);
+    }
+
+    @Override
+    @Transactional
+    public User updateUser(Long userId, UpdateUserRequest updateUserRequest) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
+        }
+
+        // 更新昵称
+        if (updateUserRequest.getNickname() != null) {
+            user.setNickname(updateUserRequest.getNickname());
+        }
+
+        // 更新头像
+        if (updateUserRequest.getAvatar() != null) {
+            user.setAvatar(updateUserRequest.getAvatar());
+        }
+
+        // 更新邮箱（需要检查唯一性）
+        if (updateUserRequest.getEmail() != null && !updateUserRequest.getEmail().equals(user.getEmail())) {
+            QueryWrapper<User> emailQuery = new QueryWrapper<>();
+            emailQuery.eq("email", updateUserRequest.getEmail());
+            emailQuery.ne("id", userId);
+            if (userMapper.selectOne(emailQuery) != null) {
+                throw new RuntimeException("邮箱已被其他用户使用");
+            }
+            user.setEmail(updateUserRequest.getEmail());
+        }
+
+        userMapper.updateById(user);
+        return user;
     }
 }
