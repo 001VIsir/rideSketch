@@ -103,6 +103,9 @@
             <el-tab-pane label="普通规划" name="normal">
               <RoutePanel ref="routePanelRef" />
             </el-tab-pane>
+            <el-tab-pane label="AI规划" name="ai">
+              <AIRoutePanel />
+            </el-tab-pane>
             <el-tab-pane label="结果" name="result">
               <RouteResultPanel />
             </el-tab-pane>
@@ -115,7 +118,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { Search, Route } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { searchAddress } from '@/api/map'
 import { useMapStore } from '@/stores/mapStore'
@@ -123,6 +126,7 @@ import { useRouteStore } from '@/stores/routeStore'
 import { getMapInstance, drawRoute, clearRoute, addMarker, removeMarker } from '@/utils/amap'
 import Amap from '@/components/common/Amap.vue'
 import RoutePanel from '@/components/route/RoutePanel.vue'
+import AIRoutePanel from '@/components/route/AIRoutePanel.vue'
 import RouteResultPanel from '@/components/route/RouteResultPanel.vue'
 import type { PoiInfo } from '@/types/map'
 import type { PathInfo } from '@/api/route'
