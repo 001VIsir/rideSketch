@@ -21,12 +21,6 @@ fi
 echo "Java版本检查通过"
 
 # 检查Maven
-echo "[2/4] 检查Maven环境..."
-if ! command -v mvn &> /dev/null; then
-    echo "错误: 未找到Maven，请先安装Maven 3.8+"
-    exit 1
-fi
-echo "Maven环境检查通过"
 
 # 检查Node.js (前端)
 echo "[3/4] 检查Node.js环境..."

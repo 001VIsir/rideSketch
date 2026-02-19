@@ -45,6 +45,9 @@ public class SecurityConfig {
                                 "/api/auth/**",
                                 "/api/map/**",
                                 "/api/route/**",
+                                "/api/community/routes",
+                                "/api/community/route/{id}",
+                                "/api/community/route/{id}/comments",
                                 "/api/public/**",
                                 "/error"
                         ).permitAll()
