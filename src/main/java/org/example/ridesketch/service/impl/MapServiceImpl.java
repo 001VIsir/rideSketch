@@ -187,6 +187,17 @@ public class MapServiceImpl implements MapService {
                     List<JSONObject> geocodeList = JSON.parseArray(geocodesJson, JSONObject.class);
                     if (!geocodeList.isEmpty()) {
                         JSONObject geo = geocodeList.get(0);
+
+                        // 从location字段解析经纬度，格式为"经度,纬度"
+                        String location = geo.getString("location");
+                        String lat = null;
+                        String lng = null;
+                        if (StringUtils.isNotBlank(location) && location.contains(",")) {
+                            String[] parts = location.split(",");
+                            lng = parts[0];
+                            lat = parts[1];
+                        }
+
                         GeoCodeResult.GeocodeInfo geocodeInfo = GeoCodeResult.GeocodeInfo.builder()
                                 .formattedAddress(geo.getString("formatted_address"))
                                 .country(geo.getString("country"))
@@ -197,8 +208,8 @@ public class MapServiceImpl implements MapService {
                                 .township(geo.getString("township"))
                                 .street(geo.getString("street"))
                                 .number(geo.getString("number"))
-                                .lat(geo.getString("lat"))
-                                .lng(geo.getString("lng"))
+                                .lat(lat)
+                                .lng(lng)
                                 .confidence(geo.getString("confidence"))
                                 .level(geo.getString("level"))
                                 .build();

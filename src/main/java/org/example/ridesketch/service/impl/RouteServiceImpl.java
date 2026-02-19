@@ -247,11 +247,23 @@ public class RouteServiceImpl implements RouteService {
         try {
             JSONObject jsonObject = JSON.parseObject(json);
             RoutePlanningResult result = new RoutePlanningResult();
-            result.setStatus(jsonObject.getString("status"));
-            result.setInfo(jsonObject.getString("info"));
 
-            if ("1".equals(result.getStatus())) {
+            // 支持V3和V4版本的API
+            // V3: {"status":"1", "info":"OK", "route":{...}}
+            // V4: {"errcode":0, "errmsg":"OK", "data":{...}}
+            String status = jsonObject.getString("status");
+            String errcode = jsonObject.getString("errcode");
+
+            if ("1".equals(status) || "0".equals(errcode)) {
+                result.setStatus("1");
+                result.setInfo("OK");
+
+                // 尝试从V3或V4格式中获取路线数据
                 JSONObject routeObj = jsonObject.getJSONObject("route");
+                if (routeObj == null) {
+                    routeObj = jsonObject.getJSONObject("data");
+                }
+
                 if (routeObj != null) {
                     RoutePlanningResult.RouteInfo routeInfo = RoutePlanningResult.RouteInfo.builder()
                             .origin(routeObj.getString("origin"))
@@ -273,6 +285,12 @@ public class RouteServiceImpl implements RouteService {
 
                     result.setRoute(routeInfo);
                 }
+            } else {
+                // 解析失败
+                result.setStatus("0");
+                String info = jsonObject.getString("info");
+                String errmsg = jsonObject.getString("errmsg");
+                result.setInfo(info != null ? info : errmsg);
             }
 
             return result;

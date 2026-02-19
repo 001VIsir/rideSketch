@@ -5,9 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.ridesketch.common.Result;
 import org.example.ridesketch.dto.AIRoutePlanningRequest;
 import org.example.ridesketch.dto.AIRoutePlanningResult;
+import org.example.ridesketch.dto.PatternRouteRequest;
+import org.example.ridesketch.dto.PatternRouteResult;
 import org.example.ridesketch.dto.RoutePlanningRequest;
 import org.example.ridesketch.dto.RoutePlanningResult;
 import org.example.ridesketch.service.AIRouteService;
+import org.example.ridesketch.service.PatternRouteService;
 import org.example.ridesketch.service.RouteService;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +25,7 @@ public class RouteController {
 
     private final RouteService routeService;
     private final AIRouteService aiRouteService;
+    private final PatternRouteService patternRouteService;
 
     /**
      * 路线规划
@@ -93,6 +97,30 @@ public class RouteController {
         }
 
         AIRoutePlanningResult result = aiRouteService.planAIRoute(request);
+        return Result.success(result);
+    }
+
+    /**
+     * 图案路书生成
+     *
+     * @param request 图案路书请求
+     * @return 图案路书结果
+     */
+    @PostMapping("/pattern")
+    public Result<PatternRouteResult> generatePatternRoute(@RequestBody PatternRouteRequest request) {
+        log.info("图案路书生成请求: {}", request.getDescription());
+
+        if (request.getDescription() == null || request.getDescription().isBlank()) {
+            if (request.getPattern() == null || request.getPattern().isBlank()) {
+                return Result.error("请输入图案描述或图案内容");
+            }
+        }
+
+        if (request.getCity() == null || request.getCity().isBlank()) {
+            return Result.error("请提供城市名称");
+        }
+
+        PatternRouteResult result = patternRouteService.generatePatternRoute(request);
         return Result.success(result);
     }
 }
