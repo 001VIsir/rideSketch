@@ -120,7 +120,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { searchAddress } from '@/api/map'
+import { searchAddress, geocode } from '@/api/map'
 import { useMapStore } from '@/stores/mapStore'
 import { useRouteStore } from '@/stores/routeStore'
 import { getMapInstance, drawRoute, clearRoute, addMarker, removeMarker } from '@/utils/amap'
@@ -144,13 +144,81 @@ async function handleSearch() {
 
   mapStore.setSearching(true)
   try {
-    const result = await searchAddress(searchKeyword.value)
-    const pois = result.pois || []
-    if (result.status === '1' && pois.length > 0) {
+    // 使用当前地图中心城市或默认北京
+    let city = '010' // 默认北京
+    try {
+      const { reGeocode } = await import('@/utils/amap')
+      const [lng, lat] = mapStore.center
+      const address = await reGeocode(lng, lat)
+      if (address) {
+        // 从地址中提取城市名
+        const cityMatch = address.match(/^(北京市|天津市|上海市|重庆市|([^\x00-\xff]+市))/);
+        if (cityMatch) {
+          const cityName = cityMatch[1]
+          // 转换为城市编码
+          const cityCodeMap: Record<string, string> = {
+            '北京市': '010',
+            '天津市': '022',
+            '上海市': '021',
+            '重庆市': '023',
+            '广州市': '020',
+            '深圳市': '0755',
+            '杭州市': '0571',
+            '成都市': '028',
+            '武汉市': '027',
+            '西安市': '029',
+            '南京市': '025',
+            '苏州市': '0512',
+          }
+          city = cityCodeMap[cityName] || '010'
+        }
+      }
+    } catch (e) {
+      console.warn('获取城市失败，使用默认北京:', e)
+    }
+
+    // 先尝试POI搜索
+    const result = await searchAddress(searchKeyword.value, city)
+    let pois = result.pois || []
+
+    // 如果POI搜索结果不佳（没有匹配的结果），尝试添加城市前缀后再次搜索
+    if (pois.length === 0 || !pois.some(p =>
+      (p.name && p.name.toLowerCase().includes(searchKeyword.value.toLowerCase())) ||
+      (p.address && p.address.toLowerCase().includes(searchKeyword.value.toLowerCase()))
+    )) {
+      // 尝试使用完整地址搜索：城市+关键词
+      const cityNames: Record<string, string> = {
+        '010': '北京市',
+        '022': '天津市',
+        '021': '上海市',
+        '023': '重庆市',
+        '020': '广州市',
+        '0755': '深圳市',
+        '0571': '杭州市',
+        '028': '成都市',
+        '027': '武汉市',
+        '029': '西安市',
+        '025': '南京市'
+      }
+      const cityName = cityNames[city] || ''
+      if (cityName) {
+        const fullResult = await searchAddress(cityName + searchKeyword.value, city)
+        if (fullResult.pois && fullResult.pois.length > 0) {
+          pois = fullResult.pois
+        }
+      }
+    }
+
+    if (pois.length > 0) {
       mapStore.setSearchResults(pois)
-      // 定位到第一个结果
-      const firstPoi = pois[0]
-      if (firstPoi) {
+      // 优先选择名称或地址中包含搜索关键词的结果
+      const keyword = searchKeyword.value.toLowerCase()
+      let firstPoi = pois.find(p =>
+        (p.name && p.name.toLowerCase().includes(keyword)) ||
+        (p.address && p.address.toLowerCase().includes(keyword))
+      ) || pois[0]
+
+      if (firstPoi && firstPoi.longitude && firstPoi.latitude) {
         const lng = parseFloat(firstPoi.longitude)
         const lat = parseFloat(firstPoi.latitude)
         mapStore.setCenter(lng, lat)

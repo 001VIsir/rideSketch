@@ -46,17 +46,13 @@ public class MapServiceImpl implements MapService {
     public AddressSearchResult searchAddress(String keyword, String city) {
         try {
             String url = AMAP_BASE_URL + "/place/text?key=" + amapKey
-                    + "&keywords=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
-                    + "&output=json"
-                    + "&offset=20"
-                    + "&page=1"
-                    + "&extensions=all";
+                    + "&keywords=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8);
 
             if (StringUtils.isNotBlank(city)) {
-                url += "&city=" + URLEncoder.encode(city, StandardCharsets.UTF_8);
+                url += "&city=" + city;
             }
 
-            log.debug("搜索地址请求URL: {}", url);
+            log.info("搜索地址请求URL: {}", url);
 
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
             String body = response.getBody();
