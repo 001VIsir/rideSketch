@@ -46,6 +46,7 @@ public class SecurityConfig {
                                 "/api/map/**",
                                 "/api/route/**",
                                 "/api/rag/**",
+                                "/api/chroma/**",
                                 "/api/community/routes",
                                 "/api/community/route/{id}",
                                 "/api/community/route/{id}/comments",
