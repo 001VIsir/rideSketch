@@ -725,5 +725,113 @@ String structuredContext = """
 
 ---
 
+## 2026-02-20 - 集成测试发现问题
+
+### 测试日期
+2026-02-20
+
+### 测试环境
+- 后端服务：localhost:8080
+- 前端服务：localhost:5173
+- MySQL：localhost:3306
+- Redis：localhost:6379
+- Ollama：localhost:11434
+
+### 实际测试结果
+
+#### 通过的测试
+
+| 功能 | API | 结果 |
+|------|-----|------|
+| 地理编码 | GET /api/map/geocode | ✅ 通过 |
+| 逆地理编码 | GET /api/map/regeocode | ✅ 通过 |
+| 地址搜索 | GET /api/map/search | ✅ 通过 |
+| 骑行路线规划 | POST /api/route/plan | ✅ 通过 (8.8km) |
+| 用户注册 | POST /api/auth/register | ✅ 通过 |
+| 用户登录 | POST /api/auth/login | ✅ 通过 (JWT) |
+| AI路线规划 | POST /api/route/ai-plan | ⚠️ 部分通过 |
+
+#### 发现的问题
+
+**问题1：RAG和Chroma相关代码被删除**
+
+**现象**：
+```bash
+curl -s -X POST http://localhost:8080/api/rag/question -H "Content-Type: application/json" -d '{"question":"test"}'
+# 返回 404 Not Found
+```
+
+**分析**：
+- RagController.java 不存在
+- ChromaController.java 不存在
+- RagService.java 不存在
+- ChromaService.java 不存在
+
+**原因**：
+- 在之前的代码提交中，这些文件可能被意外删除或未正确提交
+- chroma_service.py Python文件仍然存在于项目根目录
+
+**影响**：
+- RAG知识库问答功能不可用
+- Chroma向量库语义搜索功能不可用
+
+**状态**：✅ 已解决 - 2026-02-20重新实现
+
+---
+
+**问题2：登录API字段名变更**
+
+**现象**：
+之前使用 `username` 字段，现在需要使用 `usernameOrEmail`
+
+**测试命令**：
+```bash
+# 正确
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"usernameOrEmail":"testuser001","password":"password123"}'
+```
+
+**状态**：功能正常，文档需更新
+
+---
+
+**问题3：Windows命令行中文编码**
+
+**现象**：
+```bash
+curl -X POST http://localhost:8080/api/route/ai-plan \
+  -H "Content-Type: application/json" \
+  -d '{"description":"从北京邮电大学出发","city":"北京"}'
+# 返回 400 Bad Request - Invalid UTF-8 start byte
+```
+
+**解决方案**：
+- 使用英文输入测试
+- 或使用文件方式发送请求：
+```bash
+curl -X POST http://localhost:8080/api/route/ai-plan \
+  -H "Content-Type: application/json; charset=utf-8" \
+  --data-binary @test_ai.json
+```
+
+**状态**：已知问题，需要UTF-8编码处理
+
+---
+
+### 待重新实现的功能
+
+1. **RagController** - RAG知识库问答API
+2. **RagService** - 基于关键词匹配的知识库检索
+3. **ChromaController** - Chroma向量库API
+4. **ChromaService** - 向量语义搜索服务
+
+### 相关文件
+
+- `chroma_service.py` - Python Flask服务（已存在）
+- `docs/TEST.md` - 测试文档已更新
+
+---
+
 *文档更新于：2026-02-20*
 *作者：Claude Code*

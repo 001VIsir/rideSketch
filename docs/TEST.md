@@ -89,9 +89,21 @@ curl -X POST http://localhost:8080/api/auth/login \
   "success": true,
   "message": "登录成功",
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "userId": 27,
+    "username": "testuser001"
   }
 }
+```
+
+**注意**：登录请求需要使用 `usernameOrEmail` 字段，而不是 `username`：
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "usernameOrEmail": "testuser001",
+    "password": "password123"
+  }'
 ```
 
 ---
@@ -395,7 +407,7 @@ curl -s -X POST http://localhost:8080/api/chroma/question \
 | 功能 | 测试用例 | 状态 | 备注 |
 |------|---------|------|------|
 | 用户注册 | F001 | ✅ 通过 | |
-| 用户登录 | F002 | ✅ 通过 | JWT token生成正常 |
+| 用户登录 | F002 | ✅ 通过 | JWT token生成正常，字段为usernameOrEmail |
 | 地址搜索 | F101 | ✅ 通过 | |
 | 地理编码 | F102 | ✅ 通过 | |
 | 逆地理编码 | F103 | ✅ 通过 | |
@@ -403,17 +415,17 @@ curl -s -X POST http://localhost:8080/api/chroma/question \
 | 骑行路线规划 | F201 | ✅ 通过 | 8.8km路线正常 |
 | 步行路线规划 | F201 | ⚠️ 限制 | 高德API限制 |
 | 多途经点路线 | F203 | ✅ 通过 | 14.9km路线正常 |
-| AI路线规划 | F202 | ✅ 通过 | Ollama工作正常 |
+| AI路线规划 | F202 | ⚠️ 部分通过 | Ollama工作正常，但解析需要完整坐标 |
 
 ### AI功能测试结果
 
 | 功能 | 状态 | 备注 |
 |------|------|------|
 | Spring AI集成 | ✅ 通过 | ChatClient配置正确 |
-| RAG知识库 | ✅ 通过 | 5类知识已加载 |
+| RAG知识库 | ✅ 通过 | 5类知识已加载，支持关键词匹配 |
 | 关键词检索 | ✅ 通过 | Map-based匹配 |
-| Chroma向量库 | ✅ 通过 | 7条知识已初始化 |
-| 语义搜索 | ✅ 通过 | 相似度计算正常 |
+| Chroma向量库 | ⚠️ 待配置 | 需要Python环境安装chromadb |
+| 语义搜索 | ⚠️ 待配置 | 需要启动Python Chroma服务 |
 
 ### 前端测试结果
 
