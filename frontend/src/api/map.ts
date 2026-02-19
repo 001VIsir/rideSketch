@@ -5,7 +5,7 @@ import type {
   ReGeoCodeResult,
 } from '@/types/map'
 
-const API_BASE_URL = 'http://localhost:8080/api'
+const API_BASE_URL = '/api'
 
 const request = axios.create({
   baseURL: API_BASE_URL,

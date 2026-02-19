@@ -1,6 +1,7 @@
 package org.example.ridesketch.service.impl;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,12 +39,14 @@ public class MapServiceImpl implements MapService {
     @Value("${amap.key}")
     private String amapKey;
 
+    @Value("${amap.security-key:}")
+    private String amapSecurityKey;
+
     @Override
     public AddressSearchResult searchAddress(String keyword, String city) {
         try {
             String url = AMAP_BASE_URL + "/place/text?key=" + amapKey
                     + "&keywords=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
-                    + "&types=150500|150600|150700|150800|150900|151000|151100|151200"
                     + "&output=json"
                     + "&offset=20"
                     + "&page=1"
@@ -57,7 +61,7 @@ public class MapServiceImpl implements MapService {
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
             String body = response.getBody();
 
-            log.debug("搜索地址返回结果: {}", body);
+            log.info("搜索地址返回结果: {}", body);
 
             return parseAddressSearchResult(body);
         } catch (Exception e) {
@@ -121,45 +125,79 @@ public class MapServiceImpl implements MapService {
     }
 
     /**
+     * 生成高德API签名
+     */
+    private String generateSig(String params) {
+        if (StringUtils.isBlank(amapSecurityKey)) {
+            return "";
+        }
+        try {
+            String signStr = params + amapSecurityKey;
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] bytes = md.digest(signStr.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            log.error("生成签名失败: {}", e.getMessage());
+            return "";
+        }
+    }
+
+    /**
      * 解析地址搜索结果
      */
     private AddressSearchResult parseAddressSearchResult(String json) {
         try {
+            log.info("原始返回JSON: {}", json.substring(0, Math.min(500, json.length())));
+
             JSONObject jsonObject = JSON.parseObject(json);
             AddressSearchResult result = new AddressSearchResult();
             result.setStatus(jsonObject.getString("status"));
             result.setInfo(jsonObject.getString("info"));
 
+            log.info("解析地址搜索: status={}, info={}", result.getStatus(), result.getInfo());
+
             List<AddressSearchResult.PoiInfo> pois = new ArrayList<>();
             if ("1".equals(result.getStatus())) {
-                String poisJson = jsonObject.getString("pois");
-                if (StringUtils.isNotBlank(poisJson)) {
-                    JSONObject poisObj = JSON.parseObject(poisJson);
-                    if (poisObj != null && poisObj.getString("pois") != null) {
-                        String poiListJson = poisObj.getString("pois");
-                        if (poiListJson.startsWith("[")) {
-                            List<JSONObject> poiList = JSON.parseArray(poiListJson, JSONObject.class);
-                            for (JSONObject poi : poiList) {
-                                AddressSearchResult.PoiInfo poiInfo = AddressSearchResult.PoiInfo.builder()
-                                        .id(poi.getString("id"))
-                                        .name(poi.getString("name"))
-                                        .type(poi.getString("type"))
-                                        .typecode(poi.getString("typecode"))
-                                        .latitude(poi.getString("lat"))
-                                        .longitude(poi.getString("lng"))
-                                        .address(poi.getString("address"))
-                                        .province(poi.getString("pname"))
-                                        .city(poi.getString("cityname"))
-                                        .district(poi.getString("adname"))
-                                        .build();
-                                pois.add(poiInfo);
-                            }
+                // 直接获取JSON数组而不是字符串
+                JSONArray poisArray = jsonObject.getJSONArray("pois");
+                log.info("poisArray是否为null: {}, size: {}", poisArray == null, poisArray != null ? poisArray.size() : 0);
+
+                if (poisArray != null && poisArray.size() > 0) {
+                    for (int i = 0; i < poisArray.size(); i++) {
+                        JSONObject poi = poisArray.getJSONObject(i);
+                        // 解析location字段，格式为 "经度,纬度"
+                        String location = poi.getString("location");
+                        String lat = null;
+                        String lng = null;
+                        if (StringUtils.isNotBlank(location) && location.contains(",")) {
+                            String[] parts = location.split(",");
+                            lng = parts[0];
+                            lat = parts[1];
                         }
+
+                        AddressSearchResult.PoiInfo poiInfo = AddressSearchResult.PoiInfo.builder()
+                                .id(poi.getString("id"))
+                                .name(poi.getString("name"))
+                                .type(poi.getString("type"))
+                                .typecode(poi.getString("typecode"))
+                                .latitude(lat)
+                                .longitude(lng)
+                                .address(poi.getString("address"))
+                                .province(poi.getString("pname"))
+                                .city(poi.getString("cityname"))
+                                .district(poi.getString("adname"))
+                                .build();
+                        pois.add(poiInfo);
                     }
                 }
             }
 
             result.setPois(pois);
+            log.info("最终解析结果: pois数量={}", pois.size());
             return result;
         } catch (Exception e) {
             log.error("解析地址搜索结果失败: {}", e.getMessage(), e);
