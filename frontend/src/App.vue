@@ -24,6 +24,10 @@ function goToPattern() {
   router.push('/pattern')
 }
 
+function goToCommunity() {
+  router.push('/community')
+}
+
 function handleLogout() {
   import('@/api/user').then(({ logout }) => {
     logout()
@@ -54,6 +58,13 @@ function handleLogout() {
           @click="goToPattern"
         >
           图案路书
+        </a>
+        <a
+          class="nav-link"
+          :class="{ active: route.path.startsWith('/community') }"
+          @click="goToCommunity"
+        >
+          社区
         </a>
         <a
           v-if="isLoggedIn"

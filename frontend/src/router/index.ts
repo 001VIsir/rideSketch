@@ -32,6 +32,16 @@ const router = createRouter({
       name: 'pattern',
       component: () => import('@/views/route/PatternPage.vue'),
     },
+    {
+      path: '/community',
+      name: 'community',
+      component: () => import('@/views/community/CommunityPage.vue'),
+    },
+    {
+      path: '/community/route/:id',
+      name: 'route-detail',
+      component: () => import('@/views/community/RouteDetailPage.vue'),
+    },
   ],
 })
 
