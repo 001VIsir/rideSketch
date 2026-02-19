@@ -100,7 +100,7 @@
   1. 设置起点和终点
   2. 添加途经点
   3. 系统计算最优路线
-- **状态**: 未通过
+- **状态**: 已通过
 - **优先级**: 中
 
 ---
@@ -184,4 +184,32 @@
   2. 发表评论
   3. 可回复他人评论
 - **状态**: 未通过
+- **优先级**: 中
+
+---
+
+## 技术升级任务（后续实现）
+
+### T001 - Spring AI 升级
+- **描述**: 使用Spring AI框架重构AI服务，引入Function Calling和RAG能力（详见 docs/spring-ai-upgrade-plan.md）
+- **融合到**:
+  - F202 AI智能路线规划（增强版）
+  - F301 图案路书生成
+- **状态**: 规划中
+- **优先级**: 中
+
+---
+
+## 技术升级模块
+
+### T001 - Spring AI 升级
+- **描述**: 使用Spring AI框架重构AI服务，引入Function Calling和RAG能力
+- **步骤**:
+  1. 添加Spring AI依赖，配置Ollama连接
+  2. 使用PromptTemplate重构Prompt管理
+  3. 实现Function Calling（地理编码、POI搜索、路线规划函数）
+  4. 集成向量数据库（Chroma/Pgvector）
+  5. 构建景点知识库，实现RAG检索增强
+  6. 引入AI Agent支持多轮对话式路线规划
+- **状态**: 规划中（详见 docs/spring-ai-upgrade-plan.md）
 - **优先级**: 中

@@ -48,6 +48,11 @@ public class RoutePlanningResult {
         private String destination;
 
         /**
+         * 途经点列表（多个用|分隔）
+         */
+        private String waypoints;
+
+        /**
          * 路线列表
          */
         private List<PathInfo> paths;
@@ -78,6 +83,11 @@ public class RoutePlanningResult {
          * 路线步骤列表
          */
         private List<StepInfo> steps;
+
+        /**
+         * 路径坐标点，多个坐标用;分隔（用于合并后的路线）
+         */
+        private String path;
     }
 
     @Data

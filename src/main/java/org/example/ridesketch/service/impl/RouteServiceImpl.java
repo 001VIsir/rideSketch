@@ -47,25 +47,45 @@ public class RouteServiceImpl implements RouteService {
 
     @Override
     public RoutePlanningResult planRidingRoute(String origin, String destination, String waypoints) {
+        // 如果没有途经点，直接调用API
+        if (StringUtils.isBlank(waypoints)) {
+            return planSingleSegmentRoute(origin, destination, "bicycling");
+        }
+
+        // 有途经点，需要分段规划并合并结果
+        return planMultiSegmentRoute(origin, destination, waypoints, "bicycling");
+    }
+
+    @Override
+    public RoutePlanningResult planWalkingRoute(String origin, String destination, String waypoints) {
+        // 如果没有途经点，直接调用API
+        if (StringUtils.isBlank(waypoints)) {
+            return planSingleSegmentRoute(origin, destination, "walking");
+        }
+
+        // 有途经点，需要分段规划并合并结果
+        return planMultiSegmentRoute(origin, destination, waypoints, "walking");
+    }
+
+    /**
+     * 单段路线规划（无途经点）
+     */
+    private RoutePlanningResult planSingleSegmentRoute(String origin, String destination, String mode) {
         try {
-            String url = AMAP_BASE_URL + "/direction/bicycling?key=" + amapKey
+            String url = AMAP_BASE_URL + "/direction/" + mode + "?key=" + amapKey
                     + "&origin=" + origin
                     + "&destination=" + destination;
 
-            if (StringUtils.isNotBlank(waypoints)) {
-                url += "&waypoints=" + waypoints;
-            }
-
-            log.debug("骑行路线规划请求URL: {}", url);
+            log.debug("单段路线规划请求URL: {}", url);
 
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
             String body = response.getBody();
 
-            log.debug("骑行路线规划返回结果: {}", body);
+            log.debug("路线规划返回结果: {}", body);
 
             return parseRoutePlanningResult(body);
         } catch (Exception e) {
-            log.error("骑行路线规划失败: {}", e.getMessage(), e);
+            log.error("路线规划失败: {}", e.getMessage(), e);
             return RoutePlanningResult.builder()
                     .status("0")
                     .info(e.getMessage())
@@ -73,31 +93,150 @@ public class RouteServiceImpl implements RouteService {
         }
     }
 
-    @Override
-    public RoutePlanningResult planWalkingRoute(String origin, String destination, String waypoints) {
+    /**
+     * 多段路线规划（多途经点）
+     * 将路线拆分为多个单段，分别调用API，然后合并结果
+     */
+    private RoutePlanningResult planMultiSegmentRoute(String origin, String destination, String waypoints, String mode) {
         try {
-            String url = AMAP_BASE_URL + "/direction/walking?key=" + amapKey
-                    + "&origin=" + origin
-                    + "&destination=" + destination;
+            // 解析途经点
+            String[] waypointArray = waypoints.split("\\|");
+            List<String> allPoints = new ArrayList<>();
+            allPoints.add(origin);
+            for (String wp : waypointArray) {
+                if (StringUtils.isNotBlank(wp.trim())) {
+                    allPoints.add(wp.trim());
+                }
+            }
+            allPoints.add(destination);
 
-            if (StringUtils.isNotBlank(waypoints)) {
-                url += "&waypoints=" + waypoints;
+            // 如果只有一个点（起点=终点），直接返回
+            if (allPoints.size() < 2) {
+                return RoutePlanningResult.builder()
+                        .status("0")
+                        .info("途经点格式错误")
+                        .build();
             }
 
-            log.debug("步行路线规划请求URL: {}", url);
+            // 存储每段的路线结果
+            List<RoutePlanningResult> segmentResults = new ArrayList<>();
 
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            String body = response.getBody();
+            // 分段调用API
+            for (int i = 0; i < allPoints.size() - 1; i++) {
+                String segOrigin = allPoints.get(i);
+                String segDestination = allPoints.get(i + 1);
 
-            log.debug("步行路线规划返回结果: {}", body);
+                log.debug("分段路线: {} -> {}", segOrigin, segDestination);
 
-            return parseRoutePlanningResult(body);
+                RoutePlanningResult segResult = planSingleSegmentRoute(segOrigin, segDestination, mode);
+                if (!"1".equals(segResult.getStatus())) {
+                    // 如果某段路线规划失败，返回失败结果
+                    log.warn("分段路线规划失败: {}", segResult.getInfo());
+                    return RoutePlanningResult.builder()
+                            .status("0")
+                            .info("途经点 " + segDestination + " 路线规划失败: " + segResult.getInfo())
+                            .build();
+                }
+                segmentResults.add(segResult);
+            }
+
+            // 合并所有分段结果
+            return mergeSegmentResults(segmentResults, origin, destination, waypoints);
+
         } catch (Exception e) {
-            log.error("步行路线规划失败: {}", e.getMessage(), e);
+            log.error("多途经点路线规划失败: {}", e.getMessage(), e);
             return RoutePlanningResult.builder()
                     .status("0")
                     .info(e.getMessage())
                     .build();
+        }
+    }
+
+    /**
+     * 合并多段路线结果
+     */
+    private RoutePlanningResult mergeSegmentResults(List<RoutePlanningResult> segmentResults, String origin, String destination, String waypoints) {
+        if (segmentResults.isEmpty()) {
+            return RoutePlanningResult.builder()
+                    .status("0")
+                    .info("无路线结果")
+                    .build();
+        }
+
+        if (segmentResults.size() == 1) {
+            return segmentResults.get(0);
+        }
+
+        // 计算总距离和总时间
+        long totalDistance = 0;
+        long totalDuration = 0;
+        List<RoutePlanningResult.StepInfo> mergedSteps = new ArrayList<>();
+        StringBuilder mergedPath = new StringBuilder();
+
+        for (RoutePlanningResult segResult : segmentResults) {
+            RoutePlanningResult.RouteInfo routeInfo = segResult.getRoute();
+            if (routeInfo != null && routeInfo.getPaths() != null && !routeInfo.getPaths().isEmpty()) {
+                // 取第一条路径
+                RoutePlanningResult.PathInfo pathInfo = routeInfo.getPaths().get(0);
+
+                // 累加距离和时间
+                totalDistance += parseLongSafe(pathInfo.getDistance());
+                totalDuration += parseLongSafe(pathInfo.getDuration());
+
+                // 合并步骤
+                if (pathInfo.getSteps() != null) {
+                    for (RoutePlanningResult.StepInfo step : pathInfo.getSteps()) {
+                        mergedSteps.add(step);
+
+                        // 合并路径坐标
+                        if (step.getPath() != null && !step.getPath().isEmpty()) {
+                            if (mergedPath.length() > 0) {
+                                mergedPath.append(";");
+                            }
+                            mergedPath.append(step.getPath());
+                        }
+                    }
+                }
+            }
+        }
+
+        // 构建合并后的结果
+        RoutePlanningResult.PathInfo mergedPathInfo = RoutePlanningResult.PathInfo.builder()
+                .distance(String.valueOf(totalDistance))
+                .duration(String.valueOf(totalDuration))
+                .strategy("multi_waypoint")
+                .steps(mergedSteps)
+                .path(mergedPath.toString())
+                .build();
+
+        List<RoutePlanningResult.PathInfo> paths = new ArrayList<>();
+        paths.add(mergedPathInfo);
+
+        RoutePlanningResult.RouteInfo routeInfo = RoutePlanningResult.RouteInfo.builder()
+                .origin(origin)
+                .destination(destination)
+                .waypoints(waypoints)
+                .paths(paths)
+                .build();
+
+        return RoutePlanningResult.builder()
+                .status("1")
+                .info("OK")
+                .route(routeInfo)
+                .build();
+    }
+
+    /**
+     * 安全解析Long值
+     */
+    private long parseLongSafe(String value) {
+        if (value == null || value.isEmpty()) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 
@@ -117,6 +256,7 @@ public class RouteServiceImpl implements RouteService {
                     RoutePlanningResult.RouteInfo routeInfo = RoutePlanningResult.RouteInfo.builder()
                             .origin(routeObj.getString("origin"))
                             .destination(routeObj.getString("destination"))
+                            .waypoints("")
                             .build();
 
                     // 解析路径列表
