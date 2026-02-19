@@ -16,6 +16,10 @@ function goToProfile() {
   router.push('/profile')
 }
 
+function goToLogin() {
+  router.push('/login')
+}
+
 function handleLogout() {
   import('@/api/user').then(({ logout }) => {
     logout()
@@ -51,7 +55,7 @@ function handleLogout() {
         <a
           v-if="!isLoggedIn"
           class="nav-link login-link"
-          @click="goToProfile"
+          @click="goToLogin"
         >
           登录
         </a>
