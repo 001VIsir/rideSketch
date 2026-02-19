@@ -1,4 +1,11 @@
-import request from './user'
+import axios from 'axios'
+
+const API_BASE_URL = 'http://localhost:8080/api'
+
+const request = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15000,
+})
 
 // 出行方式
 export type RouteMode = 'riding' | 'walking'

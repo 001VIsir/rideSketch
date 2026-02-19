@@ -94,7 +94,7 @@ async function handleAIRoutePlanning() {
 
     // 自动应用第一条路线
     if (result.routes && result.routes.length > 0) {
-      routeStore.setRouteResult(result.routes[0])
+      routeStore.setRouteResult(result.routes[0] || null)
     }
   } catch (error: any) {
     console.error('AI路线规划失败:', error)
@@ -107,7 +107,7 @@ async function handleAIRoutePlanning() {
 // 应用路线结果
 function handleApplyResult() {
   if (aiResult.value?.routes && aiResult.value.routes.length > 0) {
-    routeStore.setRouteResult(aiResult.value.routes[0])
+    routeStore.setRouteResult(aiResult.value.routes[0] || null)
     ElMessage.success('路线已应用，请在地图上查看')
   }
 }

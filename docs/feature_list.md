@@ -95,8 +95,8 @@
 - **描述**: 支持添加多个途经点
 - **后端**: ✅ 已实现 (通过 /api/route/plan 的 waypoints 参数)
 - **前端**:
-  - 状态: ❌ 待开发
-  - 需要: `components/route/WaypointList.vue` 途经点管理组件
+  - 状态: ✅ 已通过
+  - 组件: `components/route/RoutePanel.vue` 途经点管理
 - **优先级**: 中
 
 ---

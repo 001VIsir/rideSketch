@@ -247,10 +247,18 @@ async function drawRouteOnMap(path: PathInfo) {
   if (!map || !path.path) return
 
   // 解析路径坐标
-  const pathPoints: [number, number][] = path.path.split(';').map((coord: string) => {
-    const [lng, lat] = coord.split(',').map(Number)
-    return [lng, lat]
-  })
+  const pathPoints: [number, number][] = []
+  const coordStrings = path.path.split(';')
+  for (const coord of coordStrings) {
+    const parts = coord.split(',')
+    if (parts.length >= 2) {
+      const lng = Number(parts[0])
+      const lat = Number(parts[1])
+      if (!isNaN(lng) && !isNaN(lat)) {
+        pathPoints.push([lng, lat])
+      }
+    }
+  }
 
   // 绘制路线
   await drawRoute(pathPoints, '#409eff')
@@ -292,7 +300,7 @@ async function handleRouteMapClick(lng: number, lat: number) {
     ElMessage.success('终点已设置')
     markerMode.value = null
   } else if (markerMode.value === 'waypoint') {
-    routeStore.addWaypoint({ id: Date.now().toString(), name: address, lng, lat })
+    routeStore.addWaypoint({ name: address, lng, lat })
     ElMessage.success('途经点已添加')
   }
 }

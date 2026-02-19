@@ -57,7 +57,7 @@ export const useRouteStore = defineStore('route', () => {
   function setRouteResult(result: RoutePlanningResult | null) {
     routeResult.value = result
     if (result && result.route && result.route.paths && result.route.paths.length > 0) {
-      selectedPath.value = result.route.paths[0]
+      selectedPath.value = result.route.paths[0] || null
     } else {
       selectedPath.value = null
     }

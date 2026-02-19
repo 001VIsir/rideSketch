@@ -310,7 +310,7 @@ export async function drawRoutes(paths: [number, number][], colors?: string[]): 
 
   for (let i = 0; i < paths.length; i++) {
     const path = paths[i]
-    if (!path || path.length === 0) continue
+    if (!path || (path as any[]).length === 0) continue
 
     const AMap = await loadAMap()
     const color = colors?.[i] || defaultColors[i % defaultColors.length]
@@ -388,6 +388,16 @@ export async function addMarker(position: [number, number], label?: string, titl
 }
 
 /**
+ * 移除标记
+ * @param marker 标记对象
+ */
+export function removeMarker(marker: any): void {
+  if (mapInstance && marker) {
+    mapInstance.remove(marker)
+  }
+}
+
+/**
  * 清除所有标记和路线
  */
 export function clearAllRouteMarkers(): void {
@@ -419,8 +429,16 @@ export function parsePathString(pathStr: string): [number, number][] {
   if (!pathStr) return []
 
   const points = pathStr.split(';')
-  return points.map((point) => {
-    const [lng, lat] = point.split(',').map(Number)
-    return [lng, lat]
-  }).filter((point) => !isNaN(point[0]) && !isNaN(point[1]))
+  const result: [number, number][] = []
+  for (const point of points) {
+    const coords = point.split(',')
+    if (coords.length >= 2) {
+      const lng = Number(coords[0])
+      const lat = Number(coords[1])
+      if (!isNaN(lng) && !isNaN(lat)) {
+        result.push([lng, lat])
+      }
+    }
+  }
+  return result
 }
