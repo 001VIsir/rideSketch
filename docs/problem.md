@@ -750,6 +750,9 @@ String structuredContext = """
 | 用户注册 | POST /api/auth/register | ✅ 通过 |
 | 用户登录 | POST /api/auth/login | ✅ 通过 (JWT) |
 | AI路线规划 | POST /api/route/ai-plan | ⚠️ 部分通过 |
+| RAG问答 | POST /api/rag/question | ✅ 通过 |
+| Chroma搜索 | POST /api/chroma/search | ✅ 通过 |
+| Chroma RAG问答 | POST /api/chroma/question | ✅ 通过 |
 
 #### 发现的问题
 
