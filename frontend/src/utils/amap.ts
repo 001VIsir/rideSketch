@@ -152,14 +152,28 @@ export async function placeSearch(
   return new Promise((resolve) => {
     const placeSearch = new AMap.PlaceSearch({
       city: city || '全国',
-      citylimit: false,
+      citylimit: true,  // 限制在城市范围内
       pageSize: 20,
       pageIndex: 1,
       extensions: 'all',
     })
     placeSearch.search(keyword, (status: string, result: any) => {
       if (status === 'complete' && result.info === 'OK') {
-        resolve(result.poiList?.pois || [])
+        const pois = result.poiList?.pois || []
+        // 转换为统一格式
+        const formattedPois = pois.map((poi: any) => ({
+          id: poi.id,
+          name: poi.name,
+          type: poi.type,
+          typecode: poi.typecode,
+          latitude: poi.location.getLat(),
+          longitude: poi.location.getLng(),
+          address: poi.address,
+          province: poi.province,
+          city: poi.city,
+          district: poi.adname
+        }))
+        resolve(formattedPois)
       } else {
         resolve([])
       }
