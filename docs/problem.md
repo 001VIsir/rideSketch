@@ -1,5 +1,172 @@
 # 问题与解决方案记录
 
+## 2026-02地图搜索问题（本-20 - 会话）
+
+### 问题1：AMap API Key不匹配导致地图不显示
+
+**现象**：
+```
+FlyDataAuthTask error: USERKEY_PLAT_NOMATCH
+地图页面加载后地图区域不显示
+```
+
+**原因分析**：
+- 高德地图JS API需要使用Web端Key
+- 之前配置的服务端Key不能用于前端JS API
+
+**解决过程**：
+1. 用户提供了新的JS API Key: `aa25cb3c8d595079f7c00b6aac239b24`
+2. 配置安全密钥: `47d0577f4f07e4c9da34a4da538576b5`
+3. 修改 `frontend/src/utils/amap.ts`:
+```typescript
+;(window as any)._AMapSecurityConfig = {
+  securityJsCode: '47d0577f4f07e4c9da34a4da538576b5',
+}
+
+AMapClass = await AMapLoader.load({
+  key: 'aa25cb3c8d595079f7c00b6aac239b24',
+  ...
+})
+```
+
+**状态**：✅ 已解决
+
+---
+
+### 问题2：后端注册登录不可用
+
+**现象**：
+- 用户反馈注册登录功能无法使用
+
+**排查过程**：
+1. 检查SecurityConfig配置 - 路径配置正确
+2. 发现AuthController使用了错误路径 `/api/auth/*` 而不是 `/api/user/*`
+3. 测试登录API需要使用 `usernameOrEmail` 字段而不是 `username`
+
+**测试命令**：
+```bash
+# 注册 - 成功
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"testuser888","password":"Test123456","email":"test888@example.com","nickname":"testuser"}'
+
+# 登录 - 成功
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"usernameOrEmail":"testuser888","password":"Test123456"}'
+```
+
+**状态**：✅ 功能正常
+
+---
+
+### 问题3：后端地图搜索API返回结果不正确
+
+**现象**：
+- 搜索"天安门"返回天津的地点
+- 搜索结果与直接调用高德API不一致
+
+**排查过程**：
+1. 首先怀疑是城市参数问题 - 添加城市参数限制
+2. 检查后端MapServiceImpl代码
+3. 发现API返回的POI数据解析有问题 - pois是JSONArray不是嵌套JSON
+4. 发现types参数过滤掉了所有结果 - 移除types参数
+5. 即使移除参数，后端API返回结果仍与直接调用高德API不同
+
+**尝试的修复**：
+1. 修复POI解析逻辑 - 使用JSONArray直接解析
+2. 移除types过滤参数
+3. 简化URL参数
+4. 调整city参数编码方式
+
+**最终解决方案**：
+- 绕过有问题的后端API
+- 前端直接使用高德JS API的PlaceSearch
+
+**状态**：✅ 已解决
+
+---
+
+### 问题4：编译错误 - ChromaController和Rag文件
+
+**现象**：
+```
+COMPILATION ERROR: ChromaController.java 文件损坏
+ERROR: 找不到org.example.ridesketch.rag包
+```
+
+**原因**：
+- 之前的RAG实验代码文件损坏或未正确删除
+
+**解决**：
+```bash
+rm -f src/main/java/org/example/ridesketch/controller/ChromaController.java
+rm -rf src/main/java/org/example/ridesketch/rag/
+```
+
+**状态**：✅ 已解决
+
+---
+
+### 问题5：前端社区API导入冲突
+
+**现象**：
+- community.ts导入user.ts时出现问题
+
+**解决**：
+- 创建独立的axios实例，不依赖user.ts
+
+**状态**：✅ 已解决
+
+---
+
+### 问题6：RouteDetailPage变量名冲突
+
+**现象**：
+- Vue组件中 `const route = useRoute()` 和 `const route = ref<RouteDetail>()` 变量名冲突
+
+**解决**：
+- 重命名为 `routeParams` 和 `routeDetail`
+
+**状态**：✅ 已解决
+
+---
+
+### 问题7：地图搜索结果不准确
+
+**现象**：
+- 搜索"天安门"返回"8号楼A座"等无关POI
+- 搜索"北京邮电大学"返回天津的地点
+- 定位坐标错误
+- 结果列表重复率高
+
+**排查过程**：
+1. 怀疑城市参数问题 → 添加城市限制
+2. 怀疑后端API参数问题 → 简化参数、移除types
+3. 怀疑高德API服务端缓存 → 无解
+4. **最终发现**：后端RestTemplate调用高德API返回结果与直接调用完全不同
+
+**最终解决方案**：
+改用前端高德JS API：
+1. 修改 `MapPage.vue` 的 `handleSearch` 函数
+2. 直接调用 `amap.ts` 中的 `placeSearch` 函数
+3. 配置 `citylimit: true` 限制城市搜索
+
+```typescript
+// 直接使用前端高德JS API搜索
+const { placeSearch: amapPlaceSearch, loadAMap } = await import('@/utils/amap')
+await loadAMap()
+const pois = await amapPlaceSearch(searchKeyword.value, city)
+```
+
+**测试结果**：
+- 搜索"天安门" → ✅ 正确返回天安门、天安门广场等
+- 搜索"北京邮电大学" → ✅ 正确返回北京邮电大学(海淀校区)
+
+**状态**：✅ 已解决
+
+---
+
 ## 2026-02-19 - 路线规划功能测试
 
 ### 测试目标
