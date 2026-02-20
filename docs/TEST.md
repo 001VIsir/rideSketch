@@ -424,8 +424,8 @@ curl -s -X POST http://localhost:8080/api/chroma/question \
 | Spring AI集成 | ✅ 通过 | ChatClient配置正确 |
 | RAG知识库 | ✅ 通过 | 5类知识已加载，支持关键词匹配 |
 | 关键词检索 | ✅ 通过 | Map-based匹配 |
-| Chroma向量库 | ⚠️ 待配置 | 需要Python环境安装chromadb |
-| 语义搜索 | ⚠️ 待配置 | 需要启动Python Chroma服务 |
+| Chroma服务 | ✅ 通过 | Flask简单知识库服务(7条文档) |
+| 语义搜索 | ✅ 通过 | 关键词匹配搜索 |
 
 ### 前端测试结果
 
