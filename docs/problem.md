@@ -1106,5 +1106,74 @@ const placeSearch = new AMap.PlaceSearch({
 
 ---
 
+## 2026-02-20 - 前端路线规划测试
+
+### 问题描述
+用户反馈前端路线规划功能不可用。
+
+### 测试过程
+
+#### 1. 后端API测试
+
+**测试命令**：
+```bash
+curl -X POST http://localhost:8080/api/route/plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origin": "116.358104,39.961554",
+    "destination": "116.427428,39.929226",
+    "mode": "riding"
+  }'
+```
+
+**结果**：✅ 通过
+- 路线规划成功
+- 距离：8.8公里
+- 耗时：约35分钟
+
+#### 2. 前端代码检查
+
+**已实现的组件**：
+- `MapPage.vue` - 主地图页面，包含路线规划tab
+- `RoutePanel.vue` - 普通路线规划面板
+- `AIRoutePanel.vue` - AI路线规划面板
+- `RouteResultPanel.vue` - 路线结果显示
+
+**API代理配置**：
+- 前端vite配置正确代理到 `http://localhost:8080`
+- 后端API正常工作
+
+#### 3. 可能的问题
+
+**问题1：高德地图API Key无效**
+- 前端使用的Key: `aa25cb3c8d595079f7c00b6aac239b24`
+- 可能导致地图不显示
+
+**问题2：浏览器无法启动**
+- Playwright MCP无法启动Chrome浏览器
+- 无法直接测试前端界面
+
+### 解决方案
+
+1. **更换高德地图API Key**
+   - 需要申请Web端JS API Key
+   - 替换 `frontend/src/utils/amap.ts` 中的key
+
+2. **验证流程**
+   - 启动后端: `./mvnw spring-boot:run`
+   - 启动前端: `cd frontend && npm run dev`
+   - 访问 http://localhost:5173
+   - 点击"路线规划"tab
+   - 输入起点和终点
+   - 点击"规划路线"按钮
+
+### 当前状态
+
+- 后端API：✅ 正常工作
+- 前端代码：✅ 已实现
+- 地图显示：❌ 需要有效的API Key
+
+---
+
 *文档更新于：2026-02-20*
 *作者：Claude Code*
