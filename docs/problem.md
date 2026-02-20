@@ -836,5 +836,108 @@ curl -X POST http://localhost:8080/api/route/ai-plan \
 
 ---
 
+## 2026-02-20 - 地图搜索结果不准确问题
+
+### 问题描述
+
+前端搜索"天安门"、"北京邮电大学"等关键词时，返回结果不正确：
+- 搜索"天安门"返回"8号楼A座"等无关POI
+- 搜索"北京邮电大学"返回天津的相关地点
+- 定位坐标错误
+
+### 排查过程
+
+#### 第一阶段：以为是城市参数问题
+
+**尝试1**：为搜索添加城市参数限制
+- 在前端`MapPage.vue`的`handleSearch`函数中添加城市参数
+- 将城市编码（如"010"代表北京）传给后端API
+
+**结果**：部分有效，搜索结果仍不准确
+
+#### 第二阶段：分析后端API问题
+
+**测试发现**：
+- 直接调用高德API：`curl "https://restapi.amap.com/v3/place/text?key=xxx&keywords=天安门&city=010"` → 返回正确结果
+- 通过后端调用：`curl "http://localhost:8080/api/map/search?keyword=天安门&city=010"` → 返回错误结果
+
+**分析**：相同参数，但返回结果完全不同
+
+**尝试修复**：
+1. 移除后端API中不必要的参数（`types`, `extensions`等）
+2. 调整参数顺序
+3. 尝试不同的city参数编码方式
+
+**结果**：问题依旧，后端API返回结果顺序与直接调用完全不同
+
+#### 第三阶段：定位根本原因
+
+**发现**：
+- 后端使用RestTemplate调用高德API
+- 相同的URL参数，但返回结果不同
+- 可能是高德服务端缓存或IP问题
+
+**思考**：即使相同请求，每次返回POI顺序不同，可能与服务端负载均衡有关
+
+#### 第四阶段：最终解决方案
+
+**决定**：绕过有问题的后端API，直接使用前端高德JS API
+
+**原因**：
+1. 前端高德JS API的PlaceSearch是官方原生支持
+2. 可以直接获取准确的搜索结果
+3. 不受后端网络问题影响
+
+**实现**：
+1. 修改`MapPage.vue`的`handleSearch`函数
+2. 直接调用`@/utils/amap.ts`中的`placeSearch`函数
+3. 配置`citylimit: true`限制城市搜索
+
+```typescript
+// 修改后的搜索逻辑
+const { placeSearch: amapPlaceSearch, loadAMap } = await import('@/utils/amap')
+await loadAMap()
+const pois = await amapPlaceSearch(searchKeyword.value, city)
+```
+
+**同时优化amap.ts中的placeSearch函数**：
+```typescript
+const placeSearch = new AMap.PlaceSearch({
+  city: city || '全国',
+  citylimit: true,  // 限制在城市范围内
+  pageSize: 20,
+  pageIndex: 1,
+  extensions: 'all',
+})
+```
+
+### 测试结果
+
+| 搜索关键词 | 搜索结果 | 状态 |
+|------------|----------|------|
+| 天安门 | 天安门、天安门广场、天安门东地铁站 | ✅ 正确 |
+| 北京邮电大学 | 北京邮电大学(海淀校区)、沙河校区 | ✅ 正确 |
+
+### 技术总结
+
+1. **问题根源**：后端RestTemplate调用高德Web Services API返回结果与直接调用不同
+2. **解决方案**：前端直接使用高德JS API的PlaceSearch
+3. **优点**：
+   - 结果准确
+   - 响应更快
+   - 减少后端压力
+
+### 涉及文件修改
+
+- `frontend/src/views/map/MapPage.vue` - 重写搜索逻辑
+- `frontend/src/utils/amap.ts` - 优化placeSearch函数
+
+### 提交记录
+```
+0b5f9ab fix: 修复地图搜索功能，直接使用高德JS API
+```
+
+---
+
 *文档更新于：2026-02-20*
 *作者：Claude Code*
