@@ -1,5 +1,25 @@
 # 开发进度日志
 
+## 2026-02-21
+
+### RAG知识库完善
+
+- [x] 下载nomic-embed-text embedding模型
+- [x] 添加Spring AI Ollama embedding依赖
+- [x] 新增EmbeddingService向量嵌入服务
+- [x] 新增KnowledgeBaseLoader知识库加载器
+- [x] 重构RagServiceImpl使用向量检索
+- [x] 扩展知识库到97条（9个类别）
+- [x] 测试验证向量语义检索功能
+
+### 验证结果
+
+- 向量检索正常工作
+- 相似度计算准确
+- 返回top-K相关知识
+
+---
+
 ## 2026-02-19
 
 ### 初始化项目
