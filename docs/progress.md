@@ -18,6 +18,18 @@
 - 相似度计算准确
 - 返回top-K相关知识
 
+### API测试结果
+
+| 功能 | API | 状态 |
+|------|-----|------|
+| 地图搜索 | GET /api/map/search | ✅ 正常 |
+| 地理编码 | GET /api/map/geocode | ✅ 正常 |
+| 骑行路径规划 | GET /api/route/riding | ✅ 正常 |
+| AI智能路径规划 | POST /api/route/ai-plan | ✅ 正常 |
+| 图案路书生成 | POST /api/route/pattern | ✅ 正常 |
+| RAG语义检索 | GET /api/rag/search | ✅ 正常 |
+| 知识类别 | GET /api/rag/categories | ✅ 正常 |
+
 ---
 
 ## 2026-02-19

@@ -1,6 +1,60 @@
 # 问题与解决方案记录
 
-## 2026-02地图搜索问题（本-20 - 会话）
+## 2026-02-21 RAG知识库完善
+
+### 问题1：Spring AI Embedding API兼容性问题
+
+**现象**：
+- 使用Spring AI的EmbeddingModel接口时报错找不到类
+- OllamaEmbeddingModel在spring-ai-ollama 1.0.0-M4版本中API不匹配
+
+**原因分析**：
+- Spring AI 1.0.0-M4版本的Ollama embedding API与预期不同
+- 直接使用Spring AI的EmbeddingModel有依赖问题
+
+**解决过程**：
+1. 放弃使用Spring AI的EmbeddingModel接口
+2. 改为直接使用RestTemplate调用Ollama的原生API `/api/embeddings`
+3. 创建EmbeddingService直接与Ollama通信
+
+**代码实现**：
+```java
+// EmbeddingService.java
+public float[] embed(String text) {
+    String url = ollamaBaseUrl + "/api/embeddings";
+    Map<String, Object> request = new HashMap<>();
+    request.put("model", embeddingModel);
+    request.put("prompt", text);
+
+    Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
+    List<Number> embeddingList = (List<Number>) response.get("embedding");
+    // 转换并返回向量
+}
+```
+
+**状态**：✅ 已解决
+
+---
+
+### 问题2：curl发送中文JSON编码问题
+
+**现象**：
+- 使用curl发送中文JSON请求时出现UTF-8编码错误
+- `Invalid UTF-8 middle byte`
+
+**原因分析**：
+- Windows下curl默认编码问题
+- Shell环境对中文支持不佳
+
+**解决过程**：
+- 改用GET请求进行测试
+- 前端无此问题，因为浏览器会正确处理编码
+
+**状态**：✅ 已解决（前端无此问题）
+
+---
+
+## 2026-02-20 地图搜索问题
 
 ### 问题1：AMap API Key不匹配导致地图不显示
 

@@ -249,6 +249,31 @@ api/
 
 ---
 
+## RAG知识库模块
+
+### F501 - 骑行知识问答
+- **描述**: 基于RAG的骑行知识问答系统
+- **后端**: ✅ 已实现
+  - API: GET /api/rag/search - 语义搜索
+  - API: GET /api/rag/categories - 获取知识类别
+  - API: GET /api/rag/health - 健康检查
+- **前端**: 待开发
+- **技术实现**:
+  - 使用Ollama nomic-embed-text模型生成向量
+  - 余弦相似度计算进行语义检索
+  - Redis存储向量数据
+  - 知识库包含97条知识，9个类别
+- **优先级**: 中
+
+### F502 - 知识库管理
+- **描述**: 知识库的加载和更新
+- **后端**: ✅ 已实现
+  - 知识库自动初始化
+  - 9个类别：骑行技巧、骑行安全、北京骑行路线、骑行装备、训练计划、健康与恢复、天气与应对、自行车维护、长途骑行
+- **优先级**: 中
+
+---
+
 ## 技术升级任务
 
 ### T001 - Spring AI 升级
@@ -259,4 +284,22 @@ api/
   - 创建AIConfig配置类
   - 重构AIRouteServiceImpl使用Spring AI ChatClient
   - 修改Maven settings.xml以支持Spring Milestones仓库
+- **优先级**: 中
+
+### T002 - RAG向量检索完善
+- **描述**: 实现真正的向量语义检索
+- **状态**: ✅ 已完成
+- **内容**:
+  - 下载nomic-embed-text embedding模型
+  - 新增EmbeddingService向量嵌入服务
+  - 新增KnowledgeBaseLoader知识库加载器
+  - 重构RagServiceImpl使用向量检索替代关键词匹配
+  - 扩展知识库到97条知识（9个类别）
+- **新增文件**:
+  - `EmbeddingService.java`
+  - `KnowledgeBaseLoader.java`
+- **修改文件**:
+  - `pom.xml` - 添加spring-ai-ollama依赖
+  - `application.properties` - 添加embedding配置
+  - `RagServiceImpl.java` - 重构为向量检索
 - **优先级**: 中
