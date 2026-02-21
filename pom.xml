@@ -135,6 +135,13 @@
             <version>1.0.0-M4</version>
         </dependency>
 
+        <!-- Spring AI Ollama Embedding -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-ollama</artifactId>
+            <version>1.0.0-M4</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
