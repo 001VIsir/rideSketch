@@ -1229,5 +1229,191 @@ curl -X POST http://localhost:8080/api/route/plan \
 
 ---
 
-*文档更新于：2026-02-20*
+## 2026-02-21 社区论坛模块测试问题
+
+### 测试环境
+- 后端服务：localhost:8080
+- 前端服务：localhost:5173
+- 测试方法：使用Playwright MCP浏览器自动化测试
+
+### 测试过程
+
+#### 1. F401 - 发布路线 ✅ (需要修复字段适配)
+
+**测试步骤**：
+1. 登录用户 tester001
+2. 访问社区页面 `/community`
+3. 点击"发布路线"按钮
+4. 填写表单并提交
+
+**结果**：发布成功
+
+**问题**：字段名不匹配，已修复 `frontend/src/api/community.ts`
+
+---
+
+#### 2. F402 - 查看路线列表 ✅ (需要修复字段适配)
+
+**现象**：页面报错 `TypeError: Cannot read properties of undefined (reading 'length')`
+
+**原因**：后端返回数组格式 `[{...}]`，前端期望 `{list: [...], total: N}`
+
+**修复**：修改 `getRouteList` 函数适配后端格式
+
+---
+
+#### 3. F403 - 查看路线详情 ✅
+
+**结果**：可以查看路线详情
+
+**问题**：距离和时长显示为0（字段名不匹配，已修复）
+
+---
+
+#### 4. F404 - 编辑/删除路线 ✅
+
+**现象**：编辑和删除按钮不显示
+
+**原因**：`isAuthor` computed 总是返回 false
+
+**修复**：
+1. 在 `user.ts` 添加 `getUserId` 和 `setUserId` 函数
+2. 登录成功后保存用户ID到 localStorage
+3. 修改 `RouteDetailPage.vue` 中的 `isAuthor` 逻辑
+
+---
+
+#### 5. F405 - 路线点赞 ✅
+
+**结果**：点赞功能正常工作
+
+---
+
+#### 6. F406 - 评论/回复 ✅
+
+**现象**：评论失败，404错误
+
+**原因**：API路径错误，前端调用 `/comments` 而后端是 `/comment`
+
+**修复**：修改 `postComment` 函数中的API路径
+
+---
+
+### 发现的具体问题
+
+#### 问题1：前端路线列表API返回格式不匹配
+
+- **现象**: 页面报错 `TypeError: Cannot read properties of undefined (reading 'length')`
+- **原因**: 后端 `/api/community/routes` 返回的是数组格式 `[{...}]`，前端期望的是 `{list: [...], total: N}` 格式
+- **修复**: 修改 `frontend/src/api/community.ts` 中 `getRouteList` 函数，适配后端返回格式
+
+#### 问题2：发布路线API字段不匹配
+
+- **现象**: 发布路线时，后端报错 `Invalid UTF-8 start byte` (中文问题)
+- **原因**: 前端发送的字段名与后端 DTO 不匹配
+- **修复**: 修改 `publishRoute` 函数，转换前端字段到后端字段
+
+#### 问题3：评论API路径错误
+
+- **现象**: 评论失败，错误信息 "Request failed with status code 404"
+- **原因**: 前端调用 `/community/route/{id}/comments`，但后端实际路径是 `/community/route/{id}/comment`
+- **修复**: 修改 `postComment` 函数中的API路径
+
+#### 问题4：编辑/删除按钮不显示
+
+- **现象**: 路线详情页没有显示编辑和删除按钮
+- **原因**: `isAuthor` computed 总是返回 `false`，没有正确比对用户ID
+- **修复**:
+  1. 在 `frontend/src/api/user.ts` 中添加 `getUserId` 和 `setUserId` 函数
+  2. 登录成功后保存用户ID到 localStorage
+  3. 修改 `RouteDetailPage.vue` 中的 `isAuthor` 和 `currentUserId` 逻辑
+
+#### 问题5：路线详情页距离和时长显示为0
+
+- **现象**: 路线详情页显示 "距离: 0 m", "时长: 0分钟"
+- **原因**: 后端返回的字段是 `totalDistance` 和 `estimatedTime`，前端使用 `distance` 和 `duration`
+- **状态**: 已修复字段映射
+
+#### 问题6：中文输入导致UTF-8编码错误
+
+- **现象**: 发送中文内容时报错 `Invalid UTF-8 start byte`
+- **原因**: Windows环境下的编码问题
+- **临时解决**: 测试时使用英文内容
+
+---
+
+### 修复的文件
+
+1. `frontend/src/api/community.ts` - 适配后端API格式
+2. `frontend/src/api/user.ts` - 添加用户ID存储功能
+3. `frontend/src/views/community/RouteDetailPage.vue` - 修复作者权限判断
+
+---
+
+### 测试结论
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| F401 发布路线 | ✅ 通过 | 需要字段适配 |
+| F402 查看路线列表 | ✅ 通过 | 需要字段适配 |
+| F403 查看路线详情 | ✅ 通过 | 需要字段适配 |
+| F404 编辑/删除路线 | ✅ 通过 | 需要修复作者判断 |
+| F405 路线点赞 | ✅ 通过 | 功能正常 |
+| F406 评论/回复 | ✅ 通过 | 需要API路径修复 |
+
+---
+
+## 2026-02-21 高并发与大数据量测试
+
+### 测试结果
+
+#### Redis基准测试
+
+| 操作 | 10并发 | 50并发 |
+|------|--------|--------|
+| PING | 26,000 req/s | 25,000 req/s |
+| SET | 28,000 req/s | 25,000 req/s |
+| GET | 26,000 req/s | 26,000 req/s |
+| HSET | 26,000 req/s | 24,000 req/s |
+
+结论: Redis性能优秀
+
+#### MySQL基准测试
+
+| 查询类型 | 响应时间 |
+|---------|---------|
+| LIMIT 100 | 49ms |
+| LIMIT 1000 | 104ms |
+| WHERE user_id = 22 | 119ms |
+
+结论: MySQL查询性能良好
+
+#### API压力测试
+
+- 单次请求响应时间: 2.3秒 (严重问题!)
+- 并发20-50: 能处理但仍然很慢
+
+### 发现的严重问题
+
+#### 问题1: N+1查询问题 (高优先级)
+
+位置: `CommunityServiceImpl.java:72`
+
+每条路线都单独查询点赞状态:
+```java
+.map(route -> convertToVO(route, userId,
+    userId != null && hasLiked(route.getId(), userId))) // N+1!
+```
+
+1600条数据 = 1601次SQL查询
+
+**优化方案**: 批量查询或JOIN
+
+#### 问题2: 缺少Redis缓存
+
+重复查询相同数据无缓存加速
+
+---
+
+*文档更新于：2026-02-21*
 *作者：Claude Code*

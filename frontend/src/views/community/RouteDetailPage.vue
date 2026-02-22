@@ -137,7 +137,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Star } from '@element-plus/icons-vue'
 import { getRouteDetail, likeRoute, unlikeRoute, getComments, postComment, deleteComment, type RouteDetail, type CommentInfo } from '@/api/community'
-import { getToken } from '@/api/user'
+import { getToken, getUserId } from '@/api/user'
 
 const router = useRouter()
 const routeParams = useRoute()
@@ -151,17 +151,16 @@ const liked = ref(false)
 const newComment = ref('')
 const posting = ref(false)
 
-// 当前用户ID（从token解析，这里简化处理）
+// 当前用户ID
 const currentUserId = computed(() => {
-  // 实际应该从用户信息中获取
-  return 0
+  return getUserId() || 0
 })
 
 // 是否是作者
 const isAuthor = computed(() => {
   if (!routeDetail.value) return false
-  // 实际应该比对当前用户ID
-  return false
+  // 后端返回的是userId字段
+  return routeDetail.value.userId === currentUserId.value
 })
 
 // 格式化距离

@@ -4,6 +4,7 @@ const API_BASE_URL = '/api'
 
 // Token 存储 key
 const TOKEN_KEY = 'ridesketch_token'
+const USER_ID_KEY = 'ridesketch_user_id'
 
 // 获取 token
 export function getToken(): string | null {
@@ -13,6 +14,17 @@ export function getToken(): string | null {
 // 设置 token
 export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token)
+}
+
+// 获取用户ID
+export function getUserId(): number | null {
+  const id = localStorage.getItem(USER_ID_KEY)
+  return id ? parseInt(id) : null
+}
+
+// 设置用户ID
+export function setUserId(userId: number): void {
+  localStorage.setItem(USER_ID_KEY, userId.toString())
 }
 
 // 移除 token
@@ -115,6 +127,7 @@ export async function login(data: LoginRequest): Promise<AuthResponse> {
   const response = await request.post<any>('/auth/login', data)
   if (response.data.success && response.data.data.token) {
     setToken(response.data.data.token)
+    setUserId(response.data.data.userId)
   }
   return response.data
 }
@@ -134,6 +147,8 @@ export default {
   getToken,
   setToken,
   removeToken,
+  getUserId,
+  setUserId,
   getCurrentUser,
   updateUserInfo,
   login,

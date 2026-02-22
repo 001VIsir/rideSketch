@@ -87,7 +87,27 @@ export async function getRouteList(params?: {
   city?: string
 }): Promise<{ list: RouteBasicInfo[]; total: number }> {
   const response = await request.get<any>('/community/routes', { params })
-  return response.data.data
+  const data = response.data.data
+  // 后端返回的是数组，需要转换为 {list, total} 格式，并适配字段名
+  const list = Array.isArray(data) ? data.map((item: any) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    distance: item.totalDistance ? Number(item.totalDistance) * 1000 : 0, // 转换为米
+    duration: item.estimatedTime ? item.estimatedTime : 0, // 秒
+    authorId: item.userId,
+    authorName: item.nickname || item.username,
+    authorAvatar: item.avatar,
+    likes: item.likes || 0,
+    comments: 0, // 后端未返回评论数
+    createTime: item.createTime,
+    city: item.startPoint, // 使用起点作为城市
+    path: item.routePath
+  })) : []
+  return {
+    list,
+    total: list.length
+  }
 }
 
 // 获取路线详情
@@ -96,9 +116,22 @@ export async function getRouteDetail(id: number): Promise<RouteDetail> {
   return response.data.data
 }
 
-// 发布路线
+// 发布路线 - 适配前后端字段不一致
 export async function publishRoute(data: PublishRouteRequest): Promise<RouteBasicInfo> {
-  const response = await request.post<any>('/community/route', data)
+  // 转换前端字段到后端字段
+  const backendData = {
+    title: data.title,
+    description: data.description,
+    startPoint: data.city || '未知',
+    endPoint: data.city || '未知',
+    routePath: data.path || '[]',
+    totalDistance: data.distance ? data.distance / 1000 : 0, // 转换为千米
+    estimatedTime: data.duration ? data.duration / 60 : 0, // 转换为分钟
+    difficulty: 1,
+    tags: '[]',
+    isPublic: 1
+  }
+  const response = await request.post<any>('/community/route', backendData)
   return response.data.data
 }
 
@@ -133,7 +166,8 @@ export async function getComments(routeId: number): Promise<CommentInfo[]> {
 
 // 发布评论
 export async function postComment(routeId: number, content: string): Promise<CommentInfo> {
-  const response = await request.post<any>(`/community/route/${routeId}/comments`, { content })
+  // 后端API路径是 /comment 而不是 /comments
+  const response = await request.post<any>(`/community/route/${routeId}/comment`, { content })
   return response.data.data
 }
 
