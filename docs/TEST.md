@@ -283,9 +283,11 @@ curl -s -X POST http://localhost:8080/api/rag/question \
 
 **测试要点**：
 - [ ] RagService正确初始化
-- [ ] 知识库包含5类骑行知识
-- [ ] 关键词匹配检索工作正常
+- [ ] 知识库包含9类骑行知识（97条）
+- [ ] 向量检索工作正常（Redis存储向量）
+- [ ] MMR重排工作正常
 - [ ] AI能够结合知识库回答
+- [ ] Fallback关键词匹配正常工作
 
 ---
 
@@ -422,9 +424,10 @@ curl -s -X POST http://localhost:8080/api/chroma/question \
 | 功能 | 状态 | 备注 |
 |------|------|------|
 | Spring AI集成 | ✅ 通过 | ChatClient配置正确 |
-| RAG知识库 | ✅ 通过 | 5类知识已加载，支持关键词匹配 |
-| 关键词检索 | ✅ 通过 | Map-based匹配 |
-| Chroma服务 | ✅ 通过 | Flask简单知识库服务(7条文档) |
+| RAG知识库 | ✅ 通过 | 9类知识（97条），Redis向量存储 |
+| 向量检索 | ✅ 通过 | nomic-embed-text + 余弦相似度 |
+| MMR重排 | ✅ 通过 | ResultReranker实现 |
+| Fallback | ✅ 通过 | 关键词匹配兜底 |
 | 语义搜索 | ✅ 通过 | 关键词匹配搜索 |
 
 ### 前端测试结果

@@ -1,0 +1,2 @@
+[      13ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ http://localhost:8080/api/user/login:0
+[      25ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ http://localhost:8080/favicon.ico:0

@@ -2,6 +2,7 @@ package org.example.ridesketch.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.ridesketch.dto.AuthResponse;
 import org.example.ridesketch.dto.LoginRequest;
 import org.example.ridesketch.dto.RegisterRequest;
@@ -17,6 +18,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 用户服务实现类
+ * 负责处理用户注册、登录、信息更新等业务逻辑
+ * 使用MyBatis-Plus与数据库交互，通过Spring Security进行身份认证
+ */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -29,6 +36,14 @@ public class UserServiceImpl implements UserService {
 
     private final AuthenticationManager authenticationManager;
 
+    /**
+     * 用户注册
+     * 校验用户名和邮箱唯一性，对密码进行加密存储
+     *
+     * @param registerRequest 注册请求参数（用户名、密码、邮箱、昵称）
+     * @return 注册成功的用户对象（不含密码）
+     * @throws RuntimeException 用户名或邮箱已存在时抛出
+     */
     @Override
     public User register(RegisterRequest registerRequest) {
         // 检查用户名是否已存在
@@ -56,9 +71,19 @@ public class UserServiceImpl implements UserService {
         user.setStatus(1); // 正常状态
 
         userMapper.insert(user);
+        log.info("用户注册成功: {}", user.getUsername());
         return user;
     }
 
+    /**
+     * 用户登录认证
+     * 使用Spring Security进行身份验证，成功后生成JWT令牌
+     *
+     * @param loginRequest 登录请求参数（用户名或邮箱、密码）
+     * @return 认证响应对象（包含JWT令牌和用户信息）
+     * @throws BadCredentialsException 认证失败时抛出
+     * @throws RuntimeException 账号已被禁用时抛出
+     */
     @Override
     public AuthResponse login(LoginRequest loginRequest) {
         // 尝试认证
@@ -99,6 +124,12 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
+    /**
+     * 根据用户名查询用户
+     *
+     * @param username 用户名
+     * @return 用户对象，不存在则返回null
+     */
     @Override
     public User findByUsername(String username) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
@@ -106,6 +137,12 @@ public class UserServiceImpl implements UserService {
         return userMapper.selectOne(queryWrapper);
     }
 
+    /**
+     * 根据邮箱查询用户
+     *
+     * @param email 邮箱地址
+     * @return 用户对象，不存在则返回null
+     */
     @Override
     public User findByEmail(String email) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
@@ -113,11 +150,26 @@ public class UserServiceImpl implements UserService {
         return userMapper.selectOne(queryWrapper);
     }
 
+    /**
+     * 根据用户ID查询用户
+     *
+     * @param id 用户ID
+     * @return 用户对象，不存在则返回null
+     */
     @Override
     public User findById(Long id) {
         return userMapper.selectById(id);
     }
 
+    /**
+     * 更新用户信息
+     * 支持更新昵称、头像、邮箱，邮箱更新时校验唯一性
+     *
+     * @param userId 用户ID
+     * @param updateUserRequest 更新请求参数
+     * @return 更新后的用户对象
+     * @throws RuntimeException 用户不存在或邮箱已被占用时抛出
+     */
     @Override
     @Transactional
     public User updateUser(Long userId, UpdateUserRequest updateUserRequest) {

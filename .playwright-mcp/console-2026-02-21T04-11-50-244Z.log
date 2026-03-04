@@ -1,0 +1,24 @@
+[     190ms] [WARNING] [Vue warn]: Unhandled error during execution of render function 
+  at <CommunityPage onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <App> @ http://localhost:5173/node_modules/.vite/deps/chunk-JMZIKGQ3.js?v=f3932f1b:2196
+[     190ms] [WARNING] [Vue warn]: Unhandled error during execution of component update 
+  at <CommunityPage onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <App> @ http://localhost:5173/node_modules/.vite/deps/chunk-JMZIKGQ3.js?v=f3932f1b:2196
+[     193ms] TypeError: Cannot read properties of undefined (reading 'length')
+    at Proxy._sfc_render (http://localhost:5173/src/views/community/CommunityPage.vue:179:30)
+    at renderComponentRoot (http://localhost:5173/node_modules/.vite/deps/chunk-JMZIKGQ3.js?v=f3932f1b:6676:17)
+    at ReactiveEffect.componentUpdateFn [as fn] (http://localhost:5173/node_modules/.vite/deps/chunk-JMZIKGQ3.js?v=f3932f1b:8308:26)
+    at ReactiveEffect.run (http://localhost:5173/node_modules/.vite/deps/chunk-JMZIKGQ3.js?v=f3932f1b:507:19)
+    at ReactiveEffect.runIfDirty (http://localhost:5173/node_modules/.vite/deps/chunk-JMZIKGQ3.js?v=f3932f1b:545:12)
+    at callWithErrorHandling (http://localhost:5173/node_modules/.vite/deps/chunk-JMZIKGQ3.js?v=f3932f1b:2344:33)
+    at flushJobs (http://localhost:5173/node_modules/.vite/deps/chunk-JMZIKGQ3.js?v=f3932f1b:2552:9)
+[   41546ms] [ERROR] FlyDataAuthTask error: USERKEY_PLAT_NOMATCH @ https://webapi.amap.com/maps?callback=___onAPILoaded&v=2.0&key=30df485f0872725106bacd290344efd5&plugin=AMap.ToolBar,AMap.Scale,AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder:0
+[   41616ms] Uncaught Error: Unimplemented type: 3
+    at wA (https://webapi.amap.com/maps?callback=___onAPILoaded&v=2.0&key=30df485f0872725106bacd290344efd5&plugin=AMap.ToolBar,AMap.Scale,AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder:0:318529)
+    at nw (https://webapi.amap.com/maps?callback=___onAPILoaded&v=2.0&key=30df485f0872725106bacd290344efd5&plugin=AMap.ToolBar,AMap.Scale,AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder:0:315803)
+    at read (https://webapi.amap.com/maps?callback=___onAPILoaded&v=2.0&key=30df485f0872725106bacd290344efd5&plugin=AMap.ToolBar,AMap.Scale,AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder:0:346549)
+    at decodeStyle (https://webapi.amap.com/maps?callback=___onAPILoaded&v=2.0&key=30df485f0872725106bacd290344efd5&plugin=AMap.ToolBar,AMap.Scale,AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder:0:386807)
+    at <anonymous> (https://webapi.amap.com/maps?callback=___onAPILoaded&v=2.0&key=30df485f0872725106bacd290344efd5&plugin=AMap.ToolBar,AMap.Scale,AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder:0:718484)
+    at Ajax.window.XMLHttpRequest.window.wv.onreadystatechange (https://webapi.amap.com/maps?callback=___onAPILoaded&v=2.0&key=30df485f0872725106bacd290344efd5&plugin=AMap.ToolBar,AMap.Scale,AMap.Geolocation,AMap.PlaceSearch,AMap.Geocoder:0:636281)

@@ -25,6 +25,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 社区服务实现类
+ * 负责骑行路线的发布、浏览、点赞、评论等社区功能
+ * 使用MyBatis-Plus与数据库交互，支持分页查询和事务处理
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

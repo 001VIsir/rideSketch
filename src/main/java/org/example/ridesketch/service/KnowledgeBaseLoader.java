@@ -170,7 +170,7 @@ public class KnowledgeBaseLoader {
     /**
      * 初始化知识库，将知识条目向量化并存入Redis
      */
-    @PostConstruct
+    // @PostConstruct  // 暂时禁用自动初始化，需要时可手动调用
     public void initKnowledgeBase() {
         log.info("开始初始化知识库...");
         try {

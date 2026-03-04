@@ -56,13 +56,14 @@ public class AIRouteServiceImpl implements AIRouteService {
 
             请返回以下格式的JSON:
             {{
-              "origin": "起点地址或地名",
-              "destination": "终点地址或地名",
+              "origin": "起点中文地址（必须是中文全称，如北京市天安门广场）",
+              "destination": "终点中文地址（必须是中文全称，如上海市外滩）",
               "distance": "预估距离(公里)",
               "preference": "偏好类型(scenic-景点/food-美食/history-历史/nature-自然/mix-综合)",
               "description": "路线特点描述"
             }}
 
+            重要：必须返回中文地址！如果是外国地名请翻译成中文。
             如果无法确定起点或终点，请使用null。
             """;
 
@@ -260,19 +261,44 @@ public class AIRouteServiceImpl implements AIRouteService {
      */
     private String geocodeAddress(String address) {
         try {
-            String url = "https://restapi.amap.com/v3/geo?key=" + amapKey
-                    + "&address=" + java.net.URLEncoder.encode(address, "UTF-8");
+            String encodedAddress = java.net.URLEncoder.encode(address, "UTF-8");
+            // 添加output=JSON参数确保返回JSON格式
+            String url = "https://restapi.amap.com/v3/geocode/geo?key=" + amapKey
+                    + "&address=" + encodedAddress
+                    + "&output=JSON";
 
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            String body = response.getBody();
+            log.debug("地理编码请求: {}", url);
+
+            // 使用HttpURLConnection来确保正确的请求
+            java.net.URL urlObj = new java.net.URL(url);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) urlObj.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+
+            int responseCode = conn.getResponseCode();
+            log.debug("HTTP响应码: {}", responseCode);
+
+            java.io.BufferedReader in = new java.io.BufferedReader(
+                new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+            String inputLine;
+            StringBuilder response = new StringBuilder();
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+            String body = response.toString();
+
+            log.debug("地理编码响应: {}", body);
 
             if (body != null) {
                 JSONObject jsonObject = JSON.parseObject(body);
                 if ("1".equals(jsonObject.getString("status"))) {
                     JSONArray geocodes = jsonObject.getJSONArray("geocodes");
                     if (geocodes != null && !geocodes.isEmpty()) {
-                        JSONObject location = geocodes.getJSONObject(0);
-                        String lng = location.getString("location");
+                        JSONObject locationObj = geocodes.getJSONObject(0);
+                        String lng = locationObj.getString("location");
+                        log.debug("地理编码结果: {} -> {}", address, lng);
                         if (StringUtils.isNotBlank(lng)) {
                             String[] parts = lng.split(",");
                             if (parts.length == 2) {
@@ -280,11 +306,15 @@ public class AIRouteServiceImpl implements AIRouteService {
                             }
                             return lng;
                         }
+                    } else {
+                        log.warn("地理编码无结果: {}", address);
                     }
+                } else {
+                    log.warn("地理编码失败: {} - {}", address, jsonObject.getString("info"));
                 }
             }
         } catch (Exception e) {
-            log.error("地理编码失败: {} - {}", address, e.getMessage());
+            log.error("地理编码异常: {} - {}", address, e.getMessage());
         }
         return null;
     }
@@ -297,36 +327,51 @@ public class AIRouteServiceImpl implements AIRouteService {
         List<AIRoutePlanningResult.Waypoint> waypoints = new ArrayList<>();
 
         try {
-            if (recommendation.contains("waypoints")) {
-                String waypointsJson = extractJsonField(recommendation, "waypoints");
-                if (StringUtils.isNotBlank(waypointsJson)) {
-                    JSONArray waypointsArray = JSON.parseArray(waypointsJson);
-                    if (waypointsArray != null) {
-                        for (int i = 0; i < waypointsArray.size(); i++) {
-                            JSONObject wp = waypointsArray.getJSONObject(i);
-                            String name = wp.getString("name");
-                            String type = wp.getString("type");
-                            String reason = wp.getString("reason");
+            log.debug("开始解析途经点推荐: {}", recommendation);
 
-                            if (StringUtils.isNotBlank(name)) {
-                                String coords = searchPOI(name, type);
-                                if (coords != null) {
-                                    waypoints.add(AIRoutePlanningResult.Waypoint.builder()
-                                            .name(name)
-                                            .location(coords)
-                                            .type(type)
-                                            .description(reason)
-                                            .build());
-                                }
+            // 尝试直接解析整个JSON响应
+            if (recommendation.contains("waypoints")) {
+                // 提取JSON对象
+                JSONObject jsonObj = JSON.parseObject(recommendation);
+                JSONArray waypointsArray = jsonObj.getJSONArray("waypoints");
+
+                if (waypointsArray != null && !waypointsArray.isEmpty()) {
+                    log.debug("找到 {} 个途经点", waypointsArray.size());
+
+                    for (int i = 0; i < waypointsArray.size(); i++) {
+                        JSONObject wp = waypointsArray.getJSONObject(i);
+                        String name = wp.getString("name");
+                        String type = wp.getString("type");
+                        String reason = wp.getString("reason");
+
+                        log.debug("处理途经点: {} - {}", name, type);
+
+                        if (StringUtils.isNotBlank(name)) {
+                            String coords = searchPOI(name, type);
+                            if (coords != null) {
+                                waypoints.add(AIRoutePlanningResult.Waypoint.builder()
+                                        .name(name)
+                                        .location(coords)
+                                        .type(type)
+                                        .description(reason)
+                                        .build());
+                                log.debug("途经点添加成功: {} -> {}", name, coords);
+                            } else {
+                                log.warn("途经点坐标获取失败: {}", name);
                             }
                         }
                     }
+                } else {
+                    log.warn("途经点数组为空或null");
                 }
+            } else {
+                log.warn("推荐结果中未包含waypoints字段");
             }
         } catch (Exception e) {
-            log.error("搜索推荐POI失败: {}", e.getMessage());
+            log.error("搜索推荐POI失败: {}", e.getMessage(), e);
         }
 
+        log.debug("最终途经点数量: {}", waypoints.size());
         return waypoints;
     }
 
@@ -335,13 +380,36 @@ public class AIRouteServiceImpl implements AIRouteService {
      */
     private String searchPOI(String keyword, String type) {
         try {
+            String encodedKeyword = java.net.URLEncoder.encode(keyword, "UTF-8");
+            String encodedType = java.net.URLEncoder.encode(type != null ? type : "", "UTF-8");
             String url = "https://restapi.amap.com/v3/place/text?key=" + amapKey
-                    + "&keywords=" + java.net.URLEncoder.encode(keyword, "UTF-8")
-                    + "&types=" + (type != null ? type : "")
-                    + "&offset=1&page=1";
+                    + "&keywords=" + encodedKeyword
+                    + "&types=" + encodedType
+                    + "&offset=1&page=1&output=JSON";
 
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            String body = response.getBody();
+            log.debug("搜索POI请求: {}", url);
+
+            // 使用HttpURLConnection
+            java.net.URL urlObj = new java.net.URL(url);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) urlObj.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+
+            int responseCode = conn.getResponseCode();
+            log.debug("搜索POI响应码: {}", responseCode);
+
+            java.io.BufferedReader in = new java.io.BufferedReader(
+                new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+            String inputLine;
+            StringBuilder response = new StringBuilder();
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+            String body = response.toString();
+
+            log.debug("搜索POI响应: {}", body);
 
             if (body != null) {
                 JSONObject jsonObject = JSON.parseObject(body);

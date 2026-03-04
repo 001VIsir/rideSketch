@@ -64,13 +64,52 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             如果无法确定图案或城市，请使用null。
             """;
 
+    /**
+     * AI生成图案坐标点的prompt模板
+     */
+    private static final String GENERATE_PATTERN_PROMPT_TEMPLATE = """
+            生成一个简单的%s形状骑行路线坐标点。城市中心：经度%s，纬度%s。
+
+            返回JSON格式（只返回JSON，不要其他内容）：
+            {"points": [{"longitude":经度,"latitude":纬度,"index":0},...]}
+
+            要求：5-8个点，第一点和最后一点相同形成闭环。
+            """;
+
+    /**
+     * 根据图案内容自动判断是文字还是图形
+     */
+    private String guessPatternType(String pattern) {
+        if (pattern == null) {
+            return "text";
+        }
+
+        String p = pattern.toLowerCase();
+
+        // 图形关键字
+        String[] shapeKeywords = {"circle", "圆形", "star", "五角星", "heart", "心形",
+                "triangle", "三角形", "square", "正方形", "pentagon", "五边形"};
+
+        for (String keyword : shapeKeywords) {
+            if (p.contains(keyword)) {
+                return "shape";
+            }
+        }
+
+        // 默认是文字
+        return "text";
+    }
+
     @Override
     public PatternRouteResult generatePatternRoute(PatternRouteRequest request) {
         try {
             log.info("开始生成图案路书: {}", request.getDescription());
 
-            // 步骤1: 解析用户输入
-            String parsedInfo = parsePatternInput(request.getDescription());
+            // 步骤1: 解析用户输入（只有description不为空时才调用LLM）
+            String parsedInfo = "{}";
+            if (StringUtils.isNotBlank(request.getDescription())) {
+                parsedInfo = parsePatternInput(request.getDescription());
+            }
             log.debug("LLM解析结果: {}", parsedInfo);
 
             // 步骤2: 提取图案信息
@@ -87,6 +126,9 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             }
             if (StringUtils.isNotBlank(request.getPatternType())) {
                 patternType = request.getPatternType();
+            } else if (StringUtils.isNotBlank(pattern)) {
+                // 根据pattern自动判断类型
+                patternType = guessPatternType(pattern);
             }
             if (StringUtils.isNotBlank(request.getCity())) {
                 city = request.getCity();
@@ -137,8 +179,8 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             double centerLat = Double.parseDouble(geocodeInfo.getLat());
             log.debug("城市中心坐标: {}, {}", centerLng, centerLat);
 
-            // 步骤4: 计算缩放比例
-            double scale = request.getScale() != null ? request.getScale() : 0.003;
+            // 步骤4: 计算缩放比例（增大默认值，使图案覆盖更大区域）
+            double scale = request.getScale() != null ? request.getScale() : 0.1;
             if (parsedInfo.contains("\"scale\"")) {
                 try {
                     String scaleStr = extractJsonField(parsedInfo, "scale");
@@ -152,10 +194,29 @@ public class PatternRouteServiceImpl implements PatternRouteService {
 
             // 步骤5: 生成图案坐标点
             List<PatternRouteResult.PatternPoint> patternPoints;
-            if ("shape".equals(patternType)) {
-                patternPoints = generateShapePoints(pattern, centerLng, centerLat, scale);
+
+            // 只有当用户提供了description时才使用AI，否则用代码算法
+            if (StringUtils.isNotBlank(request.getDescription())) {
+                // 使用AI生成图案
+                patternPoints = generatePatternWithAI(pattern, centerLng, centerLat, scale);
+                log.debug("AI生成了 {} 个图案坐标点", patternPoints.size());
+
+                // 如果AI生成失败，回退到代码算法
+                if (patternPoints.isEmpty()) {
+                    log.warn("AI生成图案失败，回退到代码算法");
+                    if ("shape".equals(patternType)) {
+                        patternPoints = generateShapePoints(pattern, centerLng, centerLat, scale);
+                    } else {
+                        patternPoints = generateTextPoints(pattern, centerLng, centerLat, scale);
+                    }
+                }
             } else {
-                patternPoints = generateTextPoints(pattern, centerLng, centerLat, scale);
+                // 使用代码算法生成图案
+                if ("shape".equals(patternType)) {
+                    patternPoints = generateShapePoints(pattern, centerLng, centerLat, scale);
+                } else {
+                    patternPoints = generateTextPoints(pattern, centerLng, centerLat, scale);
+                }
             }
 
             if (patternPoints.isEmpty()) {
@@ -165,54 +226,9 @@ public class PatternRouteServiceImpl implements PatternRouteService {
                         .build();
             }
 
-            log.debug("生成了 {} 个图案坐标点", patternPoints.size());
+            log.debug("最终生成了 {} 个图案坐标点", patternPoints.size());
 
-            // 步骤6: 将图案坐标点转换为途经点，进行路线规划
-            // 为了形成完整回路，需要将终点设为起点
-            String origin = patternPoints.get(0).getLongitude() + "," + patternPoints.get(0).getLatitude();
-            String destination = origin; // 回到起点
-
-            // 构建途经点字符串
-            StringBuilder waypointsBuilder = new StringBuilder();
-            for (int i = 1; i < patternPoints.size(); i++) {
-                if (i > 1) {
-                    waypointsBuilder.append("|");
-                }
-                waypointsBuilder.append(patternPoints.get(i).getLongitude())
-                        .append(",")
-                        .append(patternPoints.get(i).getLatitude());
-            }
-            String waypoints = waypointsBuilder.toString();
-
-            // 步骤7: 进行路线规划
-            String mode = StringUtils.isNotBlank(request.getMode()) ? request.getMode() : "riding";
-            RoutePlanningResult routeResult;
-            if ("walking".equalsIgnoreCase(mode)) {
-                routeResult = routeService.planWalkingRoute(origin, destination, waypoints);
-            } else {
-                routeResult = routeService.planRidingRoute(origin, destination, waypoints);
-            }
-
-            if (routeResult == null || routeResult.getRoute() == null ||
-                    routeResult.getRoute().getPaths() == null ||
-                    routeResult.getRoute().getPaths().isEmpty()) {
-                return PatternRouteResult.builder()
-                        .status("0")
-                        .info("路线规划失败，请尝试调整图案或位置")
-                        .pattern(pattern)
-                        .patternType(patternType)
-                        .city(city)
-                        .patternPoints(patternPoints)
-                        .build();
-            }
-
-            // 步骤8: 获取路线路径
-            RoutePlanningResult.PathInfo pathInfo = routeResult.getRoute().getPaths().get(0);
-            String routePath = pathInfo.getPath();
-
-            // 步骤9: 计算量化数据
-            PatternRouteResult.QuantifiedData quantifiedData = calculateQuantifiedData(pathInfo, patternPoints.size());
-
+            // 直接返回图案点，跳过路线规划（避免高德API限流）
             return PatternRouteResult.builder()
                     .status("1")
                     .info("图案路书生成成功")
@@ -220,9 +236,6 @@ public class PatternRouteServiceImpl implements PatternRouteService {
                     .patternType(patternType)
                     .city(city)
                     .patternPoints(patternPoints)
-                    .routePath(routePath)
-                    .quantifiedData(quantifiedData)
-                    .routeData(routeResult)
                     .build();
 
         } catch (Exception e) {
@@ -264,6 +277,109 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             log.error("LLM解析失败: {}", e.getMessage());
         }
         return "{}";
+    }
+
+    /**
+     * 使用AI生成图案坐标点
+     */
+    private List<PatternRouteResult.PatternPoint> generatePatternWithAI(
+            String pattern, double centerLng, double centerLat, double scale) {
+        List<PatternRouteResult.PatternPoint> points = new ArrayList<>();
+
+        try {
+            // 调用AI生成图案坐标点
+            String prompt = String.format(GENERATE_PATTERN_PROMPT_TEMPLATE,
+                    pattern, centerLng, centerLat);
+
+            log.debug("AI图案生成请求: {}", prompt);
+
+            OllamaRequest req = new OllamaRequest();
+            req.setModel(ollamaModel);
+            req.setPrompt(prompt);
+            req.setStream(false);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<OllamaRequest> entity = new HttpEntity<>(req, headers);
+
+            String url = ollamaBaseUrl + "/api/generate";
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                OllamaResponse ollamaResponse = JSON.parseObject(
+                        response.getBody(), OllamaResponse.class);
+                String aiResult = ollamaResponse.getResponse();
+
+                log.debug("AI图案生成结果: {}", aiResult);
+
+                // 解析AI返回的坐标点
+                if (StringUtils.isNotBlank(aiResult) && aiResult.contains("points")) {
+                    JSONObject jsonObj = JSON.parseObject(aiResult);
+                    JSONArray pointsArray = jsonObj.getJSONArray("points");
+
+                    if (pointsArray != null && !pointsArray.isEmpty()) {
+                        for (int i = 0; i < pointsArray.size(); i++) {
+                            JSONObject p = pointsArray.getJSONObject(i);
+                            Double lng = p.getDouble("longitude");
+                            Double lat = p.getDouble("latitude");
+
+                            if (lng != null && lat != null) {
+                                points.add(PatternRouteResult.PatternPoint.builder()
+                                        .longitude(lng)
+                                        .latitude(lat)
+                                        .index(i)
+                                        .build());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("AI生成图案坐标点失败: {}", e.getMessage());
+        }
+
+        return points;
+    }
+
+    /**
+     * 根据图案类型和复杂度获取目标点数
+     */
+    private int getTargetPointCount(String pattern, String patternType) {
+        if (pattern == null) {
+            return 10;
+        }
+
+        String p = pattern.toLowerCase();
+
+        if ("shape".equals(patternType)) {
+            switch (p) {
+                case "circle":
+                case "圆形":
+                    return 20; // 圆形需要较多点保持平滑
+                case "heart":
+                case "心形":
+                    return 15; // 心形比较复杂
+                case "star":
+                case "五角星":
+                    return 10; // 五角星10个顶点
+                case "triangle":
+                case "三角形":
+                    return 4; // 三角形4个点
+                case "square":
+                case "正方形":
+                    return 5; // 正方形5个点（4角+起点）
+                case "pentagon":
+                case "五边形":
+                    return 6; // 五边形6个点
+                default:
+                    return 10;
+            }
+        } else {
+            // 文字图案：根据字符数计算，每个字符约5个点
+            return Math.max(pattern.length() * 5, 5);
+        }
     }
 
     /**
@@ -448,9 +564,19 @@ public class PatternRouteServiceImpl implements PatternRouteService {
                         .build());
             }
 
-            // 简化点数量（如果太多）
-            if (points.size() > 100) {
-                points = simplifyPoints(points, 100);
+            // 简化点数量，根据图案类型设置不同的目标点数
+            int targetPoints = getTargetPointCount(text, "text");
+            if (points.size() > targetPoints) {
+                points = simplifyPoints(points, targetPoints);
+            }
+
+            // 添加闭环点
+            if (!points.isEmpty()) {
+                points.add(PatternRouteResult.PatternPoint.builder()
+                        .longitude(points.get(0).getLongitude())
+                        .latitude(points.get(0).getLatitude())
+                        .index(points.size())
+                        .build());
             }
 
         } catch (Exception e) {
@@ -468,7 +594,8 @@ public class PatternRouteServiceImpl implements PatternRouteService {
         List<PatternRouteResult.PatternPoint> points = new ArrayList<>();
 
         try {
-            double radius = 0.01 * scale * 1000; // 基础半径
+            // 基础半径，根据scale调整（经纬度1度约111公里）
+            double radius = scale * 0.5; // 直接使用scale作为半径（单位：度）
 
             switch (shape.toLowerCase()) {
                 case "心形":
@@ -504,6 +631,21 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             log.error("生成图形图案坐标点失败: {}", e.getMessage());
         }
 
+        // 根据图案类型简化点数量
+        int targetPoints = getTargetPointCount(shape, "shape");
+        if (points.size() > targetPoints) {
+            points = simplifyPoints(points, targetPoints);
+        }
+
+        // 添加闭环点
+        if (!points.isEmpty()) {
+            points.add(PatternRouteResult.PatternPoint.builder()
+                    .longitude(points.get(0).getLongitude())
+                    .latitude(points.get(0).getLatitude())
+                    .index(points.size())
+                    .build());
+        }
+
         return points;
     }
 
@@ -515,13 +657,13 @@ public class PatternRouteServiceImpl implements PatternRouteService {
         List<PatternRouteResult.PatternPoint> points = new ArrayList<>();
 
         // 简化的心形参数方程
-        for (double t = 0; t <= 2 * Math.PI; t += 0.1) {
+        for (double t = 0; t <= 2 * Math.PI; t += 0.3) {
             double x = 16 * Math.pow(Math.sin(t), 3);
             double y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
 
-            // 缩放
-            double lng = centerLng + x * size * 0.0001;
-            double lat = centerLat + y * size * 0.0001;
+            // 缩放（直接使用size作为经纬度偏移）
+            double lng = centerLng + x * size * 0.00001;
+            double lat = centerLat + y * size * 0.00001;
 
             points.add(PatternRouteResult.PatternPoint.builder()
                     .longitude(lng)
@@ -540,11 +682,11 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             double centerLng, double centerLat, double radius) {
         List<PatternRouteResult.PatternPoint> points = new ArrayList<>();
 
-        int numPoints = 36;
+        int numPoints = 20; // 减少点数
         for (int i = 0; i <= numPoints; i++) {
             double angle = 2 * Math.PI * i / numPoints;
-            double lng = centerLng + radius * 0.0001 * Math.cos(angle);
-            double lat = centerLat + radius * 0.0001 * Math.sin(angle);
+            double lng = centerLng + radius * Math.cos(angle);
+            double lat = centerLat + radius * Math.sin(angle);
 
             points.add(PatternRouteResult.PatternPoint.builder()
                     .longitude(lng)
@@ -563,7 +705,7 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             double centerLng, double centerLat, double size) {
         List<PatternRouteResult.PatternPoint> points = new ArrayList<>();
 
-        double half = size * 0.0001;
+        double half = size;
         double[][] corners = {
                 {centerLng - half, centerLat - half},
                 {centerLng + half, centerLat - half},
@@ -590,8 +732,8 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             double centerLng, double centerLat, double size) {
         List<PatternRouteResult.PatternPoint> points = new ArrayList<>();
 
-        double height = size * 0.0001 * Math.sqrt(3) / 2;
-        double half = size * 0.0001;
+        double height = size * Math.sqrt(3) / 2;
+        double half = size;
 
         double[][] corners = {
                 {centerLng, centerLat + height * 2 / 3},
@@ -612,11 +754,28 @@ public class PatternRouteServiceImpl implements PatternRouteService {
     }
 
     /**
-     * 生成五角星点
+     * 生成五角星点（10个顶点：5个外顶点+5个内顶点）
      */
     private List<PatternRouteResult.PatternPoint> generateStarPoints(
             double centerLng, double centerLat, double size, int points) {
-        return generatePolygonPoints(centerLng, centerLat, size, points);
+        List<PatternRouteResult.PatternPoint> starPoints = new ArrayList<>();
+
+        // 生成五角星：交替的外半径和内半径
+        for (int i = 0; i < points * 2; i++) {
+            double angle = Math.PI / 2 + 2 * Math.PI * i / (points * 2);
+            // 外半径和内半径交替
+            double r = (i % 2 == 0) ? size : size * 0.4;
+            double lng = centerLng + r * Math.cos(angle);
+            double lat = centerLat + r * Math.sin(angle);
+
+            starPoints.add(PatternRouteResult.PatternPoint.builder()
+                    .longitude(lng)
+                    .latitude(lat)
+                    .index(i)
+                    .build());
+        }
+
+        return starPoints;
     }
 
     /**
@@ -628,8 +787,8 @@ public class PatternRouteServiceImpl implements PatternRouteService {
 
         for (int i = 0; i <= sides; i++) {
             double angle = 2 * Math.PI * i / sides - Math.PI / 2;
-            double lng = centerLng + radius * 0.0001 * Math.cos(angle);
-            double lat = centerLat + radius * 0.0001 * Math.sin(angle);
+            double lng = centerLng + radius * Math.cos(angle);
+            double lat = centerLat + radius * Math.sin(angle);
 
             points.add(PatternRouteResult.PatternPoint.builder()
                     .longitude(lng)
@@ -646,37 +805,30 @@ public class PatternRouteServiceImpl implements PatternRouteService {
      */
     private List<PatternRouteResult.PatternPoint> simplifyPoints(
             List<PatternRouteResult.PatternPoint> points, int targetSize) {
+        List<PatternRouteResult.PatternPoint> result = new ArrayList<>();
+
         if (points.size() <= targetSize) {
-            return points;
-        }
+            // 点数不足或刚好，直接使用原点数
+            result.addAll(points);
+        } else {
+            // 简化点数量
+            double step = (double) points.size() / targetSize;
 
-        // 简单的间隔采样
-        List<PatternRouteResult.PatternPoint> simplified = new ArrayList<>();
-        double step = (double) points.size() / targetSize;
-
-        for (int i = 0; i < targetSize; i++) {
-            int index = (int) (i * step);
-            if (index >= points.size()) {
-                index = points.size() - 1;
+            for (int i = 0; i < targetSize; i++) {
+                int index = (int) (i * step);
+                if (index >= points.size()) {
+                    index = points.size() - 1;
+                }
+                PatternRouteResult.PatternPoint p = points.get(index);
+                result.add(PatternRouteResult.PatternPoint.builder()
+                        .longitude(p.getLongitude())
+                        .latitude(p.getLatitude())
+                        .index(i)
+                        .build());
             }
-            PatternRouteResult.PatternPoint p = points.get(index);
-            simplified.add(PatternRouteResult.PatternPoint.builder()
-                    .longitude(p.getLongitude())
-                    .latitude(p.getLatitude())
-                    .index(i)
-                    .build());
         }
 
-        // 确保起点和终点相同
-        if (!simplified.isEmpty()) {
-            simplified.add(PatternRouteResult.PatternPoint.builder()
-                    .longitude(simplified.get(0).getLongitude())
-                    .latitude(simplified.get(0).getLatitude())
-                    .index(simplified.size())
-                    .build());
-        }
-
-        return simplified;
+        return result;
     }
 
     /**
