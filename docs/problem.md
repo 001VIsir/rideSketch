@@ -1,5 +1,104 @@
 # 问题与解决方案记录
 
+## 2026-03-08 图案路书“选了图案却画不对”二次修复
+
+### 问题：图案路书在前端选择后仍可能生成错误形状或距离异常
+
+**现象（结合截图与代码）**：
+- 选择“星星/爱心”时，实际图案可能不是期望形状。
+- 部分结果出现总距离异常（过小或不可用），地图可视化与用户选择不一致。
+
+**根因分析**：
+1. 前端 `PatternPage.vue` 将所有选项都按 `patternType=shape` 提交，`数字8/字母M/Z` 类型错误。
+2. 前端图案文案（如“爱心”“星星”）与后端图形枚举（如“心形”“五角星”）不一致，后端会落到默认分支。
+3. scale 映射过大（旧逻辑 `distance/20` 可到 `2.5`），导致图案尺寸失真。
+4. 后端在有 description 时会优先用 AI 生成图案点，即便用户已明确选择图案，导致可控性下降。
+5. 后端 scale 解析存在“解析值覆盖用户显式输入”的风险。
+
+**解决过程**：
+1. 新增归一化工具：`PatternRouteNormalizer`
+   - 统一图案类型判定（shape/text）
+   - 同义词归一（爱心→心形、星星→五角星、数字8→8、字母M/Z→M/Z）
+   - scale 范围钳制（`0.005 ~ 0.2`）
+2. 修改 `PatternRouteServiceImpl`
+   - 使用归一化逻辑替代分散判定
+   - 仅当“无明确 pattern 且有 description”时才启用 AI 生成图案点
+   - 修复 scale 优先级：用户输入优先，AI 解析值仅作兜底
+   - AI 结果增加 JSON 块提取、闭环补全与尺度标准化
+3. 修改 `frontend/src/views/route/PatternPage.vue`
+   - 图案选项改为结构化配置（key/name/pattern/patternType）
+   - 提交后端的 pattern 使用规范值（如“五角星”“心形”“8”）
+   - scale 映射调整为稳定区间（`distance/200` 后再钳制到 `0.005~0.2`）
+4. 新增测试 `PatternRouteNormalizerTest`
+   - 覆盖同义词映射、patternType 判定、scale 钳制
+5. 二次补强（根据审查意见）
+   - 在 `PatternRouteServiceImpl.generateTextPoints()` 中补齐 `M/Z` 点阵定义，避免“选字母M/Z却画成默认圆形”。
+   - 统一文字图案的尺寸基准（改为与 shape 同源的 `scale` 基准），降低“同一距离滑块下 text/shape 尺寸级别差异过大”的问题。
+
+**结论**：
+- 图案生成路径从“文案/类型不一致导致误判”改为“可控且可预测”的统一逻辑。
+- 用户选择与后端图案语义一致，图案路线正确率显著提升。
+
+## 2026-03-08 图案路书形状失真与高德密钥配置核查
+
+### 问题1：图案路书“成功”但实际路线不是图案（只显示1米短线）
+
+**现象**：
+- 前端“图案路书生成成功”，但地图中没有心形/星形轨迹。
+- 截图证据（项目根目录）显示：`pattern-map-view.png` 中路线仅“向南骑行1米到达目的地”。
+- `pattern-star-result.png` / `pattern-route-result.png` 中存在“图案信息有、路线形状不对”的问题。
+
+**根因分析（代码级）**：
+1. `PatternRouteServiceImpl.generatePatternRoute()` 曾优先调用一次骑行规划：
+   - `origin = patternPoints[0]`
+   - `destination = patternPoints[last]`
+2. 图案点通常是闭环，最后一个点被刻意设置为首点，因此 `origin == destination`。
+3. 高德骑行接口在该场景下返回极短路径（常见约1米），而后端把这条短路径当成 `routePath` 返回。
+4. 前端 `PatternPage.vue` 优先绘制 `routePath`，导致真实图案点被“1米短线”覆盖，形成“看起来功能坏了”的结果。
+
+**排查思路与取舍**：
+- 方案A：继续强依赖高德骑行接口（多途经点）还原图案。
+  - 问题：历史上已出现限流（`CUQPS_HAS_EXCEEDED_THE_LIMIT`），且形状保真不可控。
+- 方案B（采用）：图案路书优先保证“图案形状可视化正确”，后端用图案点插值生成连续 `routePath`，并据此产出距离/时长量化结果。
+  - 优点：稳定、可复现、与前端展示逻辑一致，能直接看到正确图案。
+
+**最终修复**：
+1. 修改 `src/main/java/org/example/ridesketch/service/impl/PatternRouteServiceImpl.java`
+   - 移除“闭环图案只做起终点单次骑行规划”的主流程依赖。
+   - 使用图案点分段插值生成连续路径字符串 `routePath`。
+   - 基于插值路径计算总距离 `quantifiedData.totalDistance/totalDistanceKm`。
+   - 按平均骑行速度 5m/s 估算时长并回填 `routeData.route.paths[0]`，保证前端结果与地图预览都有数据。
+2. 代码清理：删除未使用注入（`RouteService`）和未使用导入，避免编译告警/错误。
+
+**修复后预期**：
+- 地图预览直接展示可识别图案轨迹（心形/星形/圆形等）。
+- 结果面板不再出现 `undefined 米`，总距离与时长可正常显示。
+
+---
+
+### 问题2：高德地图 Key / 安全密钥是否正确填写
+
+**用户提供**：
+- Key: `aa25cb3c8d595079f7c00b6aac239b24`
+- 安全密钥: `47d0577f4f07e4c9da34a4da538576b5`
+
+**依据文档核查**：
+- `docs/amap-jsapi-v2-docs.md` 明确：JS API 2.0 需要在加载前配置：
+  - `window._AMapSecurityConfig.securityJsCode`
+  - `AMapLoader.load({ key: 'Web端(JS API) Key' })`
+- 项目中 `frontend/src/utils/amap.ts` 已按该模式填写，写法正确。
+
+**本次同步修正**：
+- `src/main/resources/application.properties`
+  - `amap.key` 更新为用户提供的 key
+  - `amap.security-key` 更新为用户提供的安全密钥（用于配置留档）
+
+**备注（重要）**：
+- 前端 JS API 与后端 Web 服务 API 在高德平台是不同服务类型，生产环境建议分别申请并管理。
+- 若后端出现配额/权限异常，应在控制台确认后端 key 是否具备 Web 服务权限。
+
+---
+
 ## 2026-02-21 RAG知识库完善
 
 ### 问题1：Spring AI Embedding API兼容性问题
@@ -1838,5 +1937,61 @@ if (routeResult == null || ...) {
 
 ---
 
-*文档更新于：2026-03-05*
+## 2026-03-08 文件监听与自动提交功能
+
+### 任务目标
+
+实现文件监听服务，监听源码变化并自动提交到Git，同时记录变更日志。
+
+### 实现方案
+
+使用 Node.js 的 `chokidar` 库实现文件监听功能：
+
+1. **文件监听**：
+   - 监听 `.java`, `.vue`, `.ts`, `.js`, `.md` 等源码文件
+   - 使用防抖机制，5秒内的多次变更合并为一次提交
+   - 忽略 `node_modules`, `target`, `.git` 等目录
+
+2. **自动提交**：
+   - 检测到文件变化后自动执行 `git add -A`
+   - 自动生成提交信息，包含时间戳和变更文件列表
+   - 支持手动触发提交
+
+3. **自动记录**：
+   - 自动将变更记录到 `docs/problem.md`
+   - 记录变更文件列表和提交信息
+
+### 创建的文件
+
+1. `scripts/file-watcher.js` - 文件监听主脚本
+2. `package.json` - 项目依赖配置
+3. `docs/file-watcher.md` - 使用说明文档
+
+### 使用方法
+
+```bash
+# 安装依赖
+npm install
+
+# 启动监听服务
+npm run watch
+
+# 立即提交所有变更
+npm run commit
+```
+
+### 配置说明
+
+可在 `scripts/file-watcher.js` 中修改：
+- `watchPatterns`: 监听的文件类型
+- `ignorePatterns`: 忽略的文件/目录
+- `commitInterval`: 自动提交间隔（毫秒）
+
+### 状态
+
+✅ 功能已实现
+
+---
+
+*文档更新于：2026-03-08*
 *作者：Claude Code*

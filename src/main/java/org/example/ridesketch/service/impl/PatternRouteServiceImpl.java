@@ -7,10 +7,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.example.ridesketch.dto.*;
-import org.example.ridesketch.service.AIRouteService;
 import org.example.ridesketch.service.MapService;
 import org.example.ridesketch.service.PatternRouteService;
-import org.example.ridesketch.service.RouteService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -32,7 +30,6 @@ import java.util.regex.Pattern;
 public class PatternRouteServiceImpl implements PatternRouteService {
 
     private final RestTemplate restTemplate;
-    private final RouteService routeService;
     private final MapService mapService;
 
     @Value("${ollama.base-url}")
@@ -57,7 +54,7 @@ public class PatternRouteServiceImpl implements PatternRouteService {
               "pattern": "图案内容，如2026或心形",
               "patternType": "图案类型(text-文字/shape-图形)",
               "city": "城市名称，如北京市",
-              "scale": 缩放比例(0.001-0.01之间的数值，表示图案大小),
+              "scale": 缩放比例(0.005-0.2之间的数值，表示图案大小),
               "description": "需求描述"
             }
 
@@ -68,37 +65,13 @@ public class PatternRouteServiceImpl implements PatternRouteService {
      * AI生成图案坐标点的prompt模板
      */
     private static final String GENERATE_PATTERN_PROMPT_TEMPLATE = """
-            生成一个简单的%s形状骑行路线坐标点。城市中心：经度%s，纬度%s。
+            生成一个简单的%s形状骑行路线坐标点。城市中心：经度%s，纬度%s，缩放比例%s。
 
             返回JSON格式（只返回JSON，不要其他内容）：
             {"points": [{"longitude":经度,"latitude":纬度,"index":0},...]}
 
             要求：5-8个点，第一点和最后一点相同形成闭环。
             """;
-
-    /**
-     * 根据图案内容自动判断是文字还是图形
-     */
-    private String guessPatternType(String pattern) {
-        if (pattern == null) {
-            return "text";
-        }
-
-        String p = pattern.toLowerCase();
-
-        // 图形关键字
-        String[] shapeKeywords = {"circle", "圆形", "star", "五角星", "heart", "心形",
-                "triangle", "三角形", "square", "正方形", "pentagon", "五边形"};
-
-        for (String keyword : shapeKeywords) {
-            if (p.contains(keyword)) {
-                return "shape";
-            }
-        }
-
-        // 默认是文字
-        return "text";
-    }
 
     @Override
     public PatternRouteResult generatePatternRoute(PatternRouteRequest request) {
@@ -124,12 +97,10 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             if (StringUtils.isNotBlank(request.getPattern())) {
                 pattern = request.getPattern();
             }
-            if (StringUtils.isNotBlank(request.getPatternType())) {
-                patternType = request.getPatternType();
-            } else if (StringUtils.isNotBlank(pattern)) {
-                // 根据pattern自动判断类型
-                patternType = guessPatternType(pattern);
-            }
+
+            patternType = PatternRouteNormalizer.normalizePatternType(request.getPatternType(), pattern);
+            pattern = PatternRouteNormalizer.normalizePattern(pattern, patternType);
+
             if (StringUtils.isNotBlank(request.getCity())) {
                 city = request.getCity();
             }
@@ -164,30 +135,32 @@ public class PatternRouteServiceImpl implements PatternRouteService {
                 log.warn("城市地理编码不可用，使用默认中心点(北京): city={}, geocodeResult={}", city, geoCodeResult);
             }
 
-            // 步骤4: 计算缩放比例（增大默认值，使图案覆盖更大区域）
-            double scale = request.getScale() != null ? request.getScale() : 0.1;
+            // 步骤4: 计算缩放比例（用户输入优先，解析值兜底，并做范围保护）
+            Double parsedScale = null;
             if (parsedInfo.contains("\"scale\"")) {
                 try {
                     String scaleStr = extractJsonField(parsedInfo, "scale");
                     if (StringUtils.isNotBlank(scaleStr)) {
-                        scale = Double.parseDouble(scaleStr);
+                        parsedScale = Double.parseDouble(scaleStr);
                     }
                 } catch (Exception e) {
                     log.warn("解析缩放比例失败，使用默认值");
                 }
             }
+            double scale = PatternRouteNormalizer.normalizeScale(request.getScale() != null ? request.getScale() : parsedScale);
 
             // 步骤5: 生成图案坐标点
             List<PatternRouteResult.PatternPoint> patternPoints;
 
-            // 只有当用户提供了description时才使用AI，否则用代码算法
-            if (StringUtils.isNotBlank(request.getDescription())) {
+            // 仅在“没有明确图案输入、只有自然语言描述”时才使用AI生成图案点
+            boolean useAiPattern = StringUtils.isBlank(request.getPattern()) && StringUtils.isNotBlank(request.getDescription());
+            if (useAiPattern) {
                 // 使用AI生成图案
                 patternPoints = generatePatternWithAI(pattern, centerLng, centerLat, scale);
                 log.debug("AI生成了 {} 个图案坐标点", patternPoints.size());
 
                 // 如果AI生成失败，回退到代码算法
-                if (patternPoints.isEmpty()) {
+                if (patternPoints.size() < 3) {
                     log.warn("AI生成图案失败，回退到代码算法");
                     if ("shape".equals(patternType)) {
                         patternPoints = generateShapePoints(pattern, centerLng, centerLat, scale);
@@ -213,7 +186,74 @@ public class PatternRouteServiceImpl implements PatternRouteService {
 
             log.debug("最终生成了 {} 个图案坐标点", patternPoints.size());
 
-            // 直接返回图案点，跳过路线规划（避免高德API限流）
+            // 关键修复：图案路书必须优先保证“图案形状正确可见”
+            // 过去使用起点->终点单次骑行规划，在闭环图案中起终点相同，导致返回1米直线，图案被破坏。
+            // 因此改为基于图案点生成连续插值路径，并据此构建 routePath / routeData / quantifiedData。
+            log.info("使用图案点插值生成图案路线，确保形状可视化准确");
+
+            int pointsPerSegment = 16;
+            StringBuilder pathBuilder = new StringBuilder();
+            List<double[]> interpolatedPoints = new ArrayList<>();
+
+            for (int i = 0; i < patternPoints.size() - 1; i++) {
+                PatternRouteResult.PatternPoint p1 = patternPoints.get(i);
+                PatternRouteResult.PatternPoint p2 = patternPoints.get(i + 1);
+
+                for (int j = 0; j < pointsPerSegment; j++) {
+                    double t = (double) j / pointsPerSegment;
+                    double lng = p1.getLongitude() + (p2.getLongitude() - p1.getLongitude()) * t;
+                    double lat = p1.getLatitude() + (p2.getLatitude() - p1.getLatitude()) * t;
+                    interpolatedPoints.add(new double[]{lng, lat});
+                }
+            }
+
+            PatternRouteResult.PatternPoint lastPoint = patternPoints.get(patternPoints.size() - 1);
+            interpolatedPoints.add(new double[]{lastPoint.getLongitude(), lastPoint.getLatitude()});
+
+            double totalDistanceKm = 0.0;
+            for (int i = 0; i < interpolatedPoints.size(); i++) {
+                double[] current = interpolatedPoints.get(i);
+                if (i > 0) {
+                    double[] previous = interpolatedPoints.get(i - 1);
+                    totalDistanceKm += calculateDistance(previous[0], previous[1], current[0], current[1]);
+                }
+
+                if (pathBuilder.length() > 0) {
+                    pathBuilder.append(";");
+                }
+                pathBuilder.append(current[0]).append(",").append(current[1]);
+            }
+
+            String routePath = pathBuilder.toString();
+            long distanceMeters = Math.round(totalDistanceKm * 1000);
+            long duration = Math.max(1L, Math.round(distanceMeters / 5.0)); // 假设平均骑行速度约5m/s
+
+            RoutePlanningResult routeResult = RoutePlanningResult.builder()
+                    .status("1")
+                    .info("OK")
+                    .route(RoutePlanningResult.RouteInfo.builder()
+                            .origin(patternPoints.get(0).getLongitude() + "," + patternPoints.get(0).getLatitude())
+                            .destination(lastPoint.getLongitude() + "," + lastPoint.getLatitude())
+                            .paths(List.of(RoutePlanningResult.PathInfo.builder()
+                                    .distance(String.valueOf(distanceMeters))
+                                    .duration(String.valueOf(duration))
+                                    .path(routePath)
+                                    .build()))
+                            .build())
+                    .build();
+
+            PatternRouteResult.QuantifiedData quantifiedData = PatternRouteResult.QuantifiedData.builder()
+                    .totalDistance((double) distanceMeters)
+                    .totalDistanceKm(totalDistanceKm)
+                    .duration(duration)
+                    .durationMinutes(duration / 60.0)
+                    .durationHours(duration / 3600.0)
+                    .difficulty(totalDistanceKm < 10 ? "easy" : (totalDistanceKm < 25 ? "medium" : "hard"))
+                    .waypointCount(patternPoints.size())
+                    .segmentCount(Math.max(1, patternPoints.size() - 1))
+                    .build();
+
+            // 返回完整的图案路书结果（包含骑行路线）
             return PatternRouteResult.builder()
                     .status("1")
                     .info("图案路书生成成功")
@@ -221,6 +261,9 @@ public class PatternRouteServiceImpl implements PatternRouteService {
                     .patternType(patternType)
                     .city(city)
                     .patternPoints(patternPoints)
+                    .routePath(routePath)
+                    .routeData(routeResult)
+                    .quantifiedData(quantifiedData)
                     .build();
 
         } catch (Exception e) {
@@ -274,7 +317,7 @@ public class PatternRouteServiceImpl implements PatternRouteService {
         try {
             // 调用AI生成图案坐标点
             String prompt = String.format(GENERATE_PATTERN_PROMPT_TEMPLATE,
-                    pattern, centerLng, centerLat);
+                    pattern, centerLng, centerLat, scale);
 
             log.debug("AI图案生成请求: {}", prompt);
 
@@ -301,7 +344,12 @@ public class PatternRouteServiceImpl implements PatternRouteService {
 
                 // 解析AI返回的坐标点
                 if (StringUtils.isNotBlank(aiResult) && aiResult.contains("points")) {
-                    JSONObject jsonObj = JSON.parseObject(aiResult);
+                    String jsonBlock = extractJsonBlock(aiResult);
+                    if (StringUtils.isBlank(jsonBlock)) {
+                        return points;
+                    }
+
+                    JSONObject jsonObj = JSON.parseObject(jsonBlock);
                     JSONArray pointsArray = jsonObj.getJSONArray("points");
 
                     if (pointsArray != null && !pointsArray.isEmpty()) {
@@ -317,6 +365,21 @@ public class PatternRouteServiceImpl implements PatternRouteService {
                                         .index(i)
                                         .build());
                             }
+                        }
+                    }
+
+                    normalizeAiPoints(points, centerLng, centerLat, scale);
+
+                    if (!points.isEmpty()) {
+                        PatternRouteResult.PatternPoint first = points.get(0);
+                        PatternRouteResult.PatternPoint last = points.get(points.size() - 1);
+                        if (Double.compare(first.getLongitude(), last.getLongitude()) != 0
+                                || Double.compare(first.getLatitude(), last.getLatitude()) != 0) {
+                            points.add(PatternRouteResult.PatternPoint.builder()
+                                    .longitude(first.getLongitude())
+                                    .latitude(first.getLatitude())
+                                    .index(points.size())
+                                    .build());
                         }
                     }
                 }
@@ -488,14 +551,47 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             {1,1,0}
         });
 
+        // M
+        digitPatterns.put('m', new int[][] {
+            {1,0,1},
+            {1,1,1},
+            {1,0,1},
+            {1,0,1},
+            {1,0,1}
+        });
+        digitPatterns.put('M', new int[][] {
+            {1,0,1},
+            {1,1,1},
+            {1,0,1},
+            {1,0,1},
+            {1,0,1}
+        });
+
+        // Z
+        digitPatterns.put('z', new int[][] {
+            {1,1,1},
+            {0,0,1},
+            {0,1,0},
+            {1,0,0},
+            {1,1,1}
+        });
+        digitPatterns.put('Z', new int[][] {
+            {1,1,1},
+            {0,0,1},
+            {0,1,0},
+            {1,0,0},
+            {1,1,1}
+        });
+
         try {
             // 将输入转换为小写
             text = text.toLowerCase();
 
-            // 计算每个字符的宽度
-            double charWidth = 0.001 * scale;
-            double charHeight = 0.002 * scale;
-            double spacing = 0.0005 * scale;
+            // 以与图形模式一致的scale基准计算文字图案尺寸，避免不同图案类型尺寸级别相差过大
+            double textScaleBase = scale * 0.5;
+            double charWidth = textScaleBase * 0.35;
+            double charHeight = textScaleBase * 0.6;
+            double spacing = textScaleBase * 0.2;
 
             // 计算总宽度和起始位置
             double totalWidth = (charWidth + spacing) * text.length();
@@ -646,9 +742,9 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             double x = 16 * Math.pow(Math.sin(t), 3);
             double y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
 
-            // 缩放（直接使用size作为经纬度偏移）
-            double lng = centerLng + x * size * 0.00001;
-            double lat = centerLat + y * size * 0.00001;
+            // 缩放（增大倍数使图案覆盖更大范围）
+            double lng = centerLng + x * size * 0.001;
+            double lat = centerLat + y * size * 0.001;
 
             points.add(PatternRouteResult.PatternPoint.builder()
                     .longitude(lng)
@@ -876,5 +972,75 @@ public class PatternRouteServiceImpl implements PatternRouteService {
             log.debug("提取JSON字段失败: {} - {}", field, e.getMessage());
         }
         return null;
+    }
+
+    private String extractJsonBlock(String rawText) {
+        if (StringUtils.isBlank(rawText)) {
+            return null;
+        }
+        int start = rawText.indexOf('{');
+        int end = rawText.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return rawText.substring(start, end + 1);
+        }
+        return null;
+    }
+
+    private void normalizeAiPoints(List<PatternRouteResult.PatternPoint> points,
+                                   double centerLng,
+                                   double centerLat,
+                                   double scale) {
+        if (points == null || points.isEmpty()) {
+            return;
+        }
+
+        double centroidLng = 0.0;
+        double centroidLat = 0.0;
+        for (PatternRouteResult.PatternPoint point : points) {
+            centroidLng += point.getLongitude();
+            centroidLat += point.getLatitude();
+        }
+        centroidLng /= points.size();
+        centroidLat /= points.size();
+
+        double currentMaxRadius = 0.0;
+        for (PatternRouteResult.PatternPoint point : points) {
+            double dx = point.getLongitude() - centroidLng;
+            double dy = point.getLatitude() - centroidLat;
+            currentMaxRadius = Math.max(currentMaxRadius, Math.sqrt(dx * dx + dy * dy));
+        }
+
+        if (currentMaxRadius == 0.0) {
+            return;
+        }
+
+        double targetRadius = Math.max(0.002, Math.min(0.08, scale * 0.5));
+        double ratio = targetRadius / currentMaxRadius;
+
+        for (int i = 0; i < points.size(); i++) {
+            PatternRouteResult.PatternPoint p = points.get(i);
+            double normalizedLng = centerLng + (p.getLongitude() - centroidLng) * ratio;
+            double normalizedLat = centerLat + (p.getLatitude() - centroidLat) * ratio;
+            points.set(i, PatternRouteResult.PatternPoint.builder()
+                    .longitude(normalizedLng)
+                    .latitude(normalizedLat)
+                    .index(i)
+                    .build());
+        }
+    }
+
+    /**
+     * 计算两点间的直线距离（单位：公里）
+     * 使用简化的 Haversine 公式
+     */
+    private double calculateDistance(double lon1, double lat1, double lon2, double lat2) {
+        double R = 6371; // 地球半径（公里）
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 }
