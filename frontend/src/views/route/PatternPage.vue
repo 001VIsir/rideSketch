@@ -71,15 +71,19 @@
             </div>
             <div class="info-item">
               <span class="info-label">总距离</span>
-              <span class="info-value">{{ routeStore.formatDistance(result.distance) }}</span>
+              <span class="info-value">{{ routeStore.formatDistance(result.totalDistance) }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">图案点数</span>
+              <span class="info-value">{{ result.patternPointCount }}</span>
             </div>
           </div>
 
-          <div v-if="result.route" class="route-details">
+          <div v-if="result.routePaths.length > 0" class="route-details">
             <div class="details-header">路线详情</div>
-            <div v-if="result.route.route?.paths?.length > 0" class="path-list">
+            <div class="path-list">
               <div
-                v-for="(path, index) in result.route.route.paths"
+                v-for="(path, index) in result.routePaths"
                 :key="index"
                 class="path-item"
               >
@@ -104,7 +108,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useRouteStore } from '@/stores/routeStore'
-import { generatePatternRoute } from '@/api/route'
+import { generatePatternRoute, type PathInfo } from '@/api/route'
 
 const router = useRouter()
 const routeStore = useRouteStore()
@@ -132,8 +136,9 @@ const loading = ref(false)
 const result = ref<{
   pattern: string
   city: string
-  distance: number
-  route: any
+  totalDistance: number
+  routePaths: PathInfo[]
+  patternPointCount: number
 } | null>(null)
 
 // 距离标记
@@ -155,12 +160,30 @@ async function handleGenerate() {
   try {
     const data = await generatePatternRoute({
       pattern: selectedPattern.value,
+      patternType: 'shape',
       city: city.value,
-      distance: distance.value,
+      scale: Math.max(0.001, Math.min(0.01, distance.value / 1000)),
       description: description.value || undefined,
     })
 
-    result.value = data
+    if (data.status !== '1') {
+      ElMessage.error(data.info || '图案路书生成失败')
+      return
+    }
+
+    const totalDistance = data.quantifiedData?.totalDistance
+      ?? (data.quantifiedData?.totalDistanceKm ? Number(data.quantifiedData.totalDistanceKm) * 1000 : 0)
+
+    const routePaths = data.routeData?.route?.paths || []
+    const patternPointCount = data.patternPoints?.length || 0
+
+    result.value = {
+      pattern: data.pattern || selectedPattern.value,
+      city: data.city || city.value,
+      totalDistance,
+      routePaths,
+      patternPointCount,
+    }
     ElMessage.success('图案路书生成成功')
   } catch (error: any) {
     console.error('生成失败:', error)
@@ -171,8 +194,17 @@ async function handleGenerate() {
 }
 
 // 在地图上查看
-function handleViewOnMap(path: any) {
-  routeStore.setRouteResult(path)
+function handleViewOnMap(path: PathInfo) {
+  routeStore.setRouteResult({
+    status: '1',
+    info: 'OK',
+    route: {
+      origin: '',
+      destination: '',
+      waypoints: '',
+      paths: [path],
+    },
+  })
   router.push('/map')
 }
 </script>

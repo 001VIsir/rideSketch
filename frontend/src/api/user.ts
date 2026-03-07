@@ -6,6 +6,12 @@ const API_BASE_URL = '/api'
 const TOKEN_KEY = 'ridesketch_token'
 const USER_ID_KEY = 'ridesketch_user_id'
 
+function notifyAuthChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('auth-changed'))
+  }
+}
+
 // 获取 token
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
@@ -14,6 +20,7 @@ export function getToken(): string | null {
 // 设置 token
 export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token)
+  notifyAuthChanged()
 }
 
 // 获取用户ID
@@ -25,11 +32,14 @@ export function getUserId(): number | null {
 // 设置用户ID
 export function setUserId(userId: number): void {
   localStorage.setItem(USER_ID_KEY, userId.toString())
+  notifyAuthChanged()
 }
 
 // 移除 token
 export function removeToken(): void {
   localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(USER_ID_KEY)
+  notifyAuthChanged()
 }
 
 // 创建 axios 实例

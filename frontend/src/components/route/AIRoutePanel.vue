@@ -41,7 +41,10 @@
         <span>AI规划结果</span>
       </div>
       <div class="result-content">
-        <p>{{ aiResult.description }}</p>
+        <p>{{ aiResult.analysis }}</p>
+        <p v-if="aiResult.recommendedWaypoints.length > 0">
+          推荐途经点：{{ aiResult.recommendedWaypoints.map((item) => item.name).join('、') }}
+        </p>
       </div>
       <div class="result-actions">
         <el-button type="primary" size="small" @click="handleApplyResult">
@@ -56,7 +59,7 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouteStore } from '@/stores/routeStore'
-import { planAIRoute } from '@/api/route'
+import { planAIRoute, planRoute } from '@/api/route'
 
 const routeStore = useRouteStore()
 
@@ -66,9 +69,22 @@ const city = ref('')
 
 // AI结果
 const aiResult = ref<{
-  description: string
-  routes: any[]
+  analysis: string
+  recommendedWaypoints: Array<{ name: string; location: string }>
 } | null>(null)
+
+function parseCoord(value?: string): { lng: number; lat: number } | null {
+  if (!value || !value.includes(',')) {
+    return null
+  }
+  const [lngText, latText] = value.split(',')
+  const lng = Number(lngText)
+  const lat = Number(latText)
+  if (Number.isNaN(lng) || Number.isNaN(lat)) {
+    return null
+  }
+  return { lng, lat }
+}
 
 // AI路线规划
 async function handleAIRoutePlanning() {
@@ -87,14 +103,46 @@ async function handleAIRoutePlanning() {
     const result = await planAIRoute({
       description: aiDescription.value,
       city: city.value,
+      mode: routeStore.mode,
     })
 
-    aiResult.value = result
+    if (result.status !== '1') {
+      ElMessage.error(result.info || 'AI路线规划失败')
+      return
+    }
+
+    aiResult.value = {
+      analysis: result.analysis || result.info || '',
+      recommendedWaypoints: result.recommendedWaypoints || [],
+    }
     ElMessage.success('AI路线规划完成')
 
-    // 自动应用第一条路线
-    if (result.routes && result.routes.length > 0) {
-      routeStore.setRouteResult(result.routes[0] || null)
+    if (result.origin && result.destination) {
+      const waypoints = (result.recommendedWaypoints || [])
+        .map((item) => item.location)
+        .filter(Boolean)
+        .join('|')
+
+      const routeResult = await planRoute({
+        mode: routeStore.mode,
+        origin: result.origin,
+        destination: result.destination,
+        waypoints: waypoints || undefined,
+      })
+
+      if (routeResult.status === '1') {
+        routeStore.setRouteResult(routeResult)
+        const originPoint = parseCoord(result.origin)
+        const destinationPoint = parseCoord(result.destination)
+        if (originPoint) {
+          routeStore.setOrigin({ ...originPoint, name: 'AI推荐起点' })
+        }
+        if (destinationPoint) {
+          routeStore.setDestination({ ...destinationPoint, name: 'AI推荐终点' })
+        }
+      } else {
+        ElMessage.warning(routeResult.info || 'AI规划完成，但路线生成失败')
+      }
     }
   } catch (error: any) {
     console.error('AI路线规划失败:', error)
@@ -106,8 +154,7 @@ async function handleAIRoutePlanning() {
 
 // 应用路线结果
 function handleApplyResult() {
-  if (aiResult.value?.routes && aiResult.value.routes.length > 0) {
-    routeStore.setRouteResult(aiResult.value.routes[0] || null)
+  if (routeStore.routeResult?.route?.paths?.length) {
     ElMessage.success('路线已应用，请在地图上查看')
   }
 }

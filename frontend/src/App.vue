@@ -1,12 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getToken } from '@/api/user'
+import { getToken, logout } from '@/api/user'
 
 const router = useRouter()
 const route = useRoute()
+const authVersion = ref(0)
 
-const isLoggedIn = computed(() => !!getToken())
+const isLoggedIn = computed(() => {
+  authVersion.value
+  route.path
+  return !!getToken()
+})
+
+function handleAuthChanged() {
+  authVersion.value += 1
+}
+
+onMounted(() => {
+  window.addEventListener('auth-changed', handleAuthChanged)
+  window.addEventListener('storage', handleAuthChanged)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('auth-changed', handleAuthChanged)
+  window.removeEventListener('storage', handleAuthChanged)
+})
 
 function goToMap() {
   router.push('/map')
@@ -29,10 +48,8 @@ function goToCommunity() {
 }
 
 function handleLogout() {
-  import('@/api/user').then(({ logout }) => {
-    logout()
-    router.push('/')
-  })
+  logout()
+  router.push('/')
 }
 </script>
 

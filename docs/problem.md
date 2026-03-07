@@ -1781,5 +1781,62 @@ if (routeResult == null || ...) {
 
 ---
 
-*文档更新于：2026-03-01*
+## 2026-03-05 图案路书功能测试
+
+### 问题描述
+
+前端图案路书页面测试：
+- 输入城市"北京"，选择"爱心"图案
+- 点击"生成路书"后，前端显示"图案路书生成成功"
+- 但总距离显示"undefined 米"
+- 右侧地图空白，没有显示路线
+
+### 原因分析
+
+1. **后端返回数据格式不匹配**：
+   - 后端 `PatternRouteServiceImpl.java:231-239` 直接返回图案坐标点，跳过了高德API路线规划
+   - 注释说明是"直接返回图案点，跳过路线规划（避免高德API限流）"
+   - 返回的 `routeData`, `quantifiedData`, `routePath` 都是 null
+
+2. **前端期望的数据结构**：
+   - `PatternPage.vue` 期望 `result.route.route.paths`
+   - 实际返回的是 `result.patternPoints`
+
+### API返回数据
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "1",
+    "pattern": "heart",
+    "city": "beijing",
+    "patternPoints": [
+      {"longitude": 116.407387, "latitude": 39.904184, "index": 0},
+      ...
+    ],
+    "routePath": null,
+    "quantifiedData": null,
+    "routeData": null
+  }
+}
+```
+
+### 结论
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 图案坐标点生成 | ✅ 正常 | 已生成16个爱心坐标点 |
+| 骑行路线规划 | ❌ 未实现 | 跳过高德API调用 |
+| 距离计算 | ❌ 未实现 | quantifiedData为null |
+| 地图显示 | ❌ 空白 | 前端无路线数据可显示 |
+
+### 修复建议
+
+1. 在前端 `PatternPage.vue` 中添加对 `patternPoints` 的支持，直接在地图上绘制图案路径
+2. 或者在后端启用高德API调用，计算实际的骑行距离和路线
+
+---
+
+*文档更新于：2026-03-05*
 *作者：Claude Code*

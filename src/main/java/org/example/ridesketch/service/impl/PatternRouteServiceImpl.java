@@ -148,36 +148,21 @@ public class PatternRouteServiceImpl implements PatternRouteService {
                         .build();
             }
 
-            // 步骤3: 获取城市中心坐标
+            // 步骤3: 获取城市中心坐标（高德异常时回退到北京中心，避免整条功能不可用）
+            double centerLng = 116.397428;
+            double centerLat = 39.90923;
             GeoCodeResult geoCodeResult = mapService.geocode(city);
-            log.debug("地理编码结果: status={}, geocodes={}", geoCodeResult.getStatus(), geoCodeResult.getGeocodes());
 
-            if (geoCodeResult == null) {
-                return PatternRouteResult.builder()
-                        .status("0")
-                        .info("无法获取城市坐标: " + city)
-                        .build();
+            if (geoCodeResult != null && geoCodeResult.getGeocodes() != null
+                    && StringUtils.isNotBlank(geoCodeResult.getGeocodes().getLng())
+                    && StringUtils.isNotBlank(geoCodeResult.getGeocodes().getLat())) {
+                GeoCodeResult.GeocodeInfo geocodeInfo = geoCodeResult.getGeocodes();
+                centerLng = Double.parseDouble(geocodeInfo.getLng());
+                centerLat = Double.parseDouble(geocodeInfo.getLat());
+                log.debug("城市中心坐标: {}, {}", centerLng, centerLat);
+            } else {
+                log.warn("城市地理编码不可用，使用默认中心点(北京): city={}, geocodeResult={}", city, geoCodeResult);
             }
-
-            if (geoCodeResult.getGeocodes() == null) {
-                log.warn("地理编码返回成功但geocodes为null: status={}, info={}", geoCodeResult.getStatus(), geoCodeResult.getInfo());
-                return PatternRouteResult.builder()
-                        .status("0")
-                        .info("无法获取城市坐标: " + city)
-                        .build();
-            }
-
-            GeoCodeResult.GeocodeInfo geocodeInfo = geoCodeResult.getGeocodes();
-            if (StringUtils.isBlank(geocodeInfo.getLng()) || StringUtils.isBlank(geocodeInfo.getLat())) {
-                return PatternRouteResult.builder()
-                        .status("0")
-                        .info("无法获取城市坐标: " + city)
-                        .build();
-            }
-
-            double centerLng = Double.parseDouble(geocodeInfo.getLng());
-            double centerLat = Double.parseDouble(geocodeInfo.getLat());
-            log.debug("城市中心坐标: {}, {}", centerLng, centerLat);
 
             // 步骤4: 计算缩放比例（增大默认值，使图案覆盖更大区域）
             double scale = request.getScale() != null ? request.getScale() : 0.1;

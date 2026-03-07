@@ -38,15 +38,15 @@
           <div class="route-stats">
             <div class="stat-item">
               <span class="stat-label">距离</span>
-              <span class="stat-value">{{ formatDistance(routeDetail?.distance || 0) }}</span>
+              <span class="stat-value">{{ formatDistance(getRouteDistance()) }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">时长</span>
-              <span class="stat-value">{{ formatDuration(routeDetail?.duration || 0) }}</span>
+              <span class="stat-value">{{ formatDuration(getRouteDuration()) }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">作者</span>
-              <span class="stat-value">{{ routeDetail?.authorName }}</span>
+              <span class="stat-value">{{ getAuthorName() }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">发布时间</span>
@@ -136,7 +136,18 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Star } from '@element-plus/icons-vue'
-import { getRouteDetail, likeRoute, unlikeRoute, getComments, postComment, deleteComment, type RouteDetail, type CommentInfo } from '@/api/community'
+import {
+  getRouteDetail,
+  likeRoute,
+  unlikeRoute,
+  getComments,
+  postComment,
+  deleteComment,
+  updateRoute,
+  deleteRoute,
+  type RouteDetail,
+  type CommentInfo,
+} from '@/api/community'
 import { getToken, getUserId } from '@/api/user'
 
 const router = useRouter()
@@ -182,6 +193,21 @@ function formatDuration(seconds: number): string {
   return `${minutes}分钟`
 }
 
+function getRouteDistance(): number {
+  if (!routeDetail.value) return 0
+  return routeDetail.value.distance || 0
+}
+
+function getRouteDuration(): number {
+  if (!routeDetail.value) return 0
+  return routeDetail.value.duration || 0
+}
+
+function getAuthorName(): string {
+  if (!routeDetail.value) return ''
+  return routeDetail.value.authorName || '匿名用户'
+}
+
 // 加载路线详情
 async function loadRouteDetail() {
   loading.value = true
@@ -189,6 +215,7 @@ async function loadRouteDetail() {
     const id = parseInt(routeParams.params.id as string)
     routeId.value = id
     routeDetail.value = await getRouteDetail(id)
+    liked.value = !!routeDetail.value.liked
   } catch (error) {
     console.error('加载路线详情失败:', error)
     ElMessage.error('加载失败，请稍后重试')
@@ -217,13 +244,17 @@ async function handleLike() {
 
   try {
     if (liked.value) {
-      await unlikeRoute(routeId.value)
-      liked.value = false
-      if (routeDetail.value) routeDetail.value.likes--
+      const result = await unlikeRoute(routeId.value)
+      liked.value = !!result.liked
+      if (routeDetail.value) {
+        routeDetail.value.likes = result.likes
+      }
     } else {
-      await likeRoute(routeId.value)
-      liked.value = true
-      if (routeDetail.value) routeDetail.value.likes++
+      const result = await likeRoute(routeId.value)
+      liked.value = !!result.liked
+      if (routeDetail.value) {
+        routeDetail.value.likes = result.likes
+      }
     }
   } catch (error) {
     console.error('操作失败:', error)
@@ -251,7 +282,9 @@ async function handlePostComment() {
     comments.value.push(comment)
     newComment.value = ''
     ElMessage.success('评论成功')
-    if (routeDetail.value) routeDetail.value.comments++
+    if (routeDetail.value && typeof routeDetail.value.comments === 'number') {
+      routeDetail.value.comments += 1
+    }
   } catch (error) {
     console.error('评论失败:', error)
     ElMessage.error('评论失败，请稍后重试')
@@ -267,10 +300,12 @@ async function handleDeleteComment(commentId: number) {
       type: 'warning',
     })
 
-    await deleteComment(routeId.value, commentId)
+    await deleteComment(commentId)
     comments.value = comments.value.filter(c => c.id !== commentId)
     ElMessage.success('删除成功')
-    if (routeDetail.value) routeDetail.value.comments--
+    if (routeDetail.value && typeof routeDetail.value.comments === 'number' && routeDetail.value.comments > 0) {
+      routeDetail.value.comments -= 1
+    }
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('删除失败:', error)
@@ -286,7 +321,24 @@ function handleBack() {
 
 // 编辑
 function handleEdit() {
-  ElMessage.info('编辑功能开发中')
+  if (!routeDetail.value) return
+
+  ElMessageBox.prompt('请输入新的路线标题', '编辑路线', {
+    inputValue: routeDetail.value.title,
+    inputPattern: /\S+/,
+    inputErrorMessage: '标题不能为空',
+  })
+    .then(async (result: any) => {
+      const value = String(result?.value ?? result)
+      await updateRoute(routeId.value, {
+        title: value,
+      })
+      ElMessage.success('编辑成功')
+      await loadRouteDetail()
+    })
+    .catch(() => {
+      // 用户取消编辑
+    })
 }
 
 // 删除
@@ -296,7 +348,7 @@ async function handleDelete() {
       type: 'warning',
     })
 
-    // 调用删除API
+    await deleteRoute(routeId.value)
     ElMessage.success('删除成功')
     router.push('/community')
   } catch (error: any) {

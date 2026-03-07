@@ -1,9 +1,9 @@
 import AMapLoader from '@amap/amap-jsapi-loader'
 
-// 高德地图安全配置（如果需要）
-// ;(window as any)._AMapSecurityConfig = {
-//   securityJsCode: '你的安全密钥',
-// }
+// 高德地图安全配置
+;(window as any)._AMapSecurityConfig = {
+  securityJsCode: '47d0577f4f07e4c9da34a4da538576b5',
+}
 
 // 地图实例缓存
 let mapInstance: any = null
@@ -18,7 +18,7 @@ export async function loadAMap(): Promise<any> {
   }
 
   AMapClass = await AMapLoader.load({
-    key: '30df485f0872725106bacd290344efd5', // 高德地图JS API Key (后端验证通过)
+    key: 'aa25cb3c8d595079f7c00b6aac239b24',
     version: '2.0',
     plugins: [
       'AMap.ToolBar',

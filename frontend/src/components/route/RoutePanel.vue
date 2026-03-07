@@ -78,7 +78,7 @@
     <el-button
       type="primary"
       :loading="routeStore.loading"
-      :disabled="!routeStore.canPlanRoute"
+      :disabled="!routeStore.canPlanRoute && (!originText.trim() || !destinationText.trim())"
       class="plan-button"
       @click="handlePlanRoute"
     >
@@ -93,7 +93,8 @@ import { Location, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRouteStore } from '@/stores/routeStore'
 import { planRoute } from '@/api/route'
-import { geocode } from '@/utils/amap'
+import { geocode as geocodeByMapApi } from '@/utils/amap'
+import { geocode as geocodeByBackend } from '@/api/map'
 
 const routeStore = useRouteStore()
 
@@ -167,6 +168,28 @@ function handleAddWaypoint(lng: number, lat: number, name?: string) {
 
 // 规划路线
 async function handlePlanRoute() {
+  if (!routeStore.origin && originText.value.trim()) {
+    const originPoint = await resolveAddressToPoint(originText.value.trim())
+    if (originPoint) {
+      routeStore.setOrigin({
+        lng: originPoint.lng,
+        lat: originPoint.lat,
+        name: originText.value.trim(),
+      })
+    }
+  }
+
+  if (!routeStore.destination && destinationText.value.trim()) {
+    const destinationPoint = await resolveAddressToPoint(destinationText.value.trim())
+    if (destinationPoint) {
+      routeStore.setDestination({
+        lng: destinationPoint.lng,
+        lat: destinationPoint.lat,
+        name: destinationText.value.trim(),
+      })
+    }
+  }
+
   if (!routeStore.canPlanRoute) {
     ElMessage.warning('请设置起点和终点')
     return
@@ -194,6 +217,50 @@ async function handlePlanRoute() {
     routeStore.setLoading(false)
   }
 }
+
+async function resolveAddressToPoint(address: string): Promise<{ lng: number; lat: number } | null> {
+  try {
+    const mapPoint = await geocodeByMapApi(address)
+    if (mapPoint) {
+      return mapPoint
+    }
+  } catch (error) {
+    console.warn('前端地图地理编码失败，尝试后端接口回退:', error)
+  }
+
+  try {
+    const result = await geocodeByBackend(address)
+    const geocodeInfo = result?.geocodes
+    if (!geocodeInfo) {
+      return null
+    }
+    const lng = Number(geocodeInfo.lng)
+    const lat = Number(geocodeInfo.lat)
+    if (Number.isNaN(lng) || Number.isNaN(lat)) {
+      return null
+    }
+    return { lng, lat }
+  } catch (error) {
+    console.warn('后端地理编码回退失败:', error)
+    return null
+  }
+}
+
+watch(
+  () => routeStore.origin,
+  (newOrigin) => {
+    if (!newOrigin) return
+    originText.value = newOrigin.name || `${newOrigin.lng.toFixed(4)}, ${newOrigin.lat.toFixed(4)}`
+  }
+)
+
+watch(
+  () => routeStore.destination,
+  (newDestination) => {
+    if (!newDestination) return
+    destinationText.value = newDestination.name || `${newDestination.lng.toFixed(4)}, ${newDestination.lat.toFixed(4)}`
+  }
+)
 
 // 暴露方法给父组件
 defineExpose({

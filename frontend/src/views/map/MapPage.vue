@@ -120,7 +120,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { searchAddress, geocode } from '@/api/map'
+import { searchAddress } from '@/api/map'
 import { useMapStore } from '@/stores/mapStore'
 import { useRouteStore } from '@/stores/routeStore'
 import { getMapInstance, drawRoute, clearRoute, addMarker, removeMarker } from '@/utils/amap'
@@ -156,8 +156,9 @@ async function handleSearch() {
       const address = await reGeocode(lng, lat)
       if (address) {
         const cityMatch = address.match(/^(北京市|天津市|上海市|重庆市|.*?市)/);
-        if (cityMatch) {
-          city = cityMatch[1].replace('市', '')
+        const matchedCity = cityMatch?.[1]
+        if (matchedCity) {
+          city = matchedCity.replace('市', '')
         }
       }
     } catch (e) {
@@ -165,19 +166,27 @@ async function handleSearch() {
     }
 
     // 使用高德JS API搜索
-    const pois = await amapPlaceSearch(searchKeyword.value, city)
+    let pois = await amapPlaceSearch(searchKeyword.value, city)
+
+    // 如果前端JS API不可用，回退到后端搜索接口
+    if (!pois || pois.length === 0) {
+      const backendResult = await searchAddress(searchKeyword.value, city)
+      if (backendResult?.status === '1' && backendResult.pois?.length > 0) {
+        pois = backendResult.pois
+      }
+    }
 
     if (pois && pois.length > 0) {
       mapStore.setSearchResults(pois)
       // 优先选择名称包含关键词的结果
       const keyword = searchKeyword.value.toLowerCase()
-      let firstPoi = pois.find(p =>
+      const firstPoi = pois.find(p =>
         p.name && p.name.toLowerCase().includes(keyword)
       ) || pois[0]
 
-      if (firstPoi && firstPoi.location) {
-        const lng = firstPoi.location.getLng()
-        const lat = firstPoi.location.getLat()
+      if (firstPoi && firstPoi.longitude && firstPoi.latitude) {
+        const lng = Number(firstPoi.longitude)
+        const lat = Number(firstPoi.latitude)
         mapStore.setCenter(lng, lat)
         mapStore.setSelectedLocation(lng, lat, firstPoi.name)
         ElMessage.success(`已定位到: ${firstPoi.name}`)

@@ -4,7 +4,7 @@ const API_BASE_URL = '/api'
 
 const request = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 180000,
 })
 
 // 出行方式
@@ -63,28 +63,60 @@ export interface RoutePlanningResult {
 export interface AIRoutePlanningRequest {
   description: string
   city?: string
+  mode?: RouteMode
+  preference?: string
 }
 
 // AI路线规划结果
 export interface AIRoutePlanningResult {
-  description: string
-  routes: RoutePlanningResult[]
+  status: string
+  info: string
+  origin?: string
+  destination?: string
+  analysis?: string
+  recommendedWaypoints?: Array<{
+    name: string
+    location: string
+    type?: string
+    description?: string
+  }>
 }
 
 // 图案路书请求
 export interface PatternRouteRequest {
   description?: string
   pattern?: string
+  patternType?: string
   city: string
-  distance?: number
+  mode?: RouteMode
+  scale?: number
 }
 
 // 图案路书结果
 export interface PatternRouteResult {
+  status: string
+  info: string
   pattern: string
+  patternType?: string
   city: string
-  distance: number
-  route: RoutePlanningResult
+  patternPoints?: Array<{
+    longitude: number
+    latitude: number
+    index: number
+  }>
+  routePath?: string
+  quantifiedData?: {
+    totalDistance?: number
+    totalDistanceKm?: number
+    duration?: number
+    durationMinutes?: number
+    durationHours?: number
+    difficulty?: string
+    elevation?: number
+    waypointCount?: number
+    segmentCount?: number
+  }
+  routeData?: RoutePlanningResult
 }
 
 // 路线规划
