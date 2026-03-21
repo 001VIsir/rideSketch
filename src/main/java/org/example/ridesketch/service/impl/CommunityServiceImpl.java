@@ -20,9 +20,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -61,7 +64,7 @@ public class CommunityServiceImpl implements CommunityService {
 
         routeMapper.insert(route);
 
-        return convertToVO(route, userId, false);
+        return convertToVO(route, false);
     }
 
     @Override
@@ -72,9 +75,12 @@ public class CommunityServiceImpl implements CommunityService {
                 .orderByDesc(Route::getCreateTime);
 
         Page<Route> result = routeMapper.selectPage(routePage, wrapper);
+        List<Route> routes = result.getRecords();
+        Map<Long, User> userMap = getUserMapByRoutes(routes);
+        Set<Long> likedRouteIds = getLikedRouteIds(routes, userId);
 
-        return result.getRecords().stream()
-                .map(route -> convertToVO(route, userId, userId != null && hasLiked(route.getId(), userId)))
+        return routes.stream()
+                .map(route -> convertToVO(route, userMap, likedRouteIds.contains(route.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -86,9 +92,11 @@ public class CommunityServiceImpl implements CommunityService {
                 .orderByDesc(Route::getCreateTime);
 
         Page<Route> result = routeMapper.selectPage(routePage, wrapper);
+        List<Route> routes = result.getRecords();
+        Map<Long, User> userMap = getUserMapByRoutes(routes);
 
-        return result.getRecords().stream()
-                .map(route -> convertToVO(route, userId, false))
+        return routes.stream()
+                .map(route -> convertToVO(route, userMap, false))
                 .collect(Collectors.toList());
     }
 
@@ -100,7 +108,7 @@ public class CommunityServiceImpl implements CommunityService {
         }
 
         boolean liked = userId != null && hasLiked(routeId, userId);
-        return convertToVO(route, userId, liked);
+        return convertToVO(route, liked);
     }
 
     @Override
@@ -151,7 +159,7 @@ public class CommunityServiceImpl implements CommunityService {
 
         routeMapper.updateById(route);
 
-        return convertToVO(route, userId, false);
+        return convertToVO(route, false);
     }
 
     @Override
@@ -195,7 +203,8 @@ public class CommunityServiceImpl implements CommunityService {
         if (existingLike != null) {
             // 取消点赞
             likeMapper.deleteById(existingLike.getId());
-            route.setLikes(route.getLikes() - 1);
+            int currentLikes = route.getLikes() == null ? 0 : route.getLikes();
+            route.setLikes(Math.max(0, currentLikes - 1));
             routeMapper.updateById(route);
             return false;
         } else {
@@ -204,7 +213,8 @@ public class CommunityServiceImpl implements CommunityService {
             like.setRouteId(routeId);
             like.setUserId(userId);
             likeMapper.insert(like);
-            route.setLikes(route.getLikes() + 1);
+            int currentLikes = route.getLikes() == null ? 0 : route.getLikes();
+            route.setLikes(currentLikes + 1);
             routeMapper.updateById(route);
             return true;
         }
@@ -326,7 +336,55 @@ public class CommunityServiceImpl implements CommunityService {
         return likeMapper.selectCount(wrapper) > 0;
     }
 
-    private RouteVO convertToVO(Route route, Long currentUserId, boolean liked) {
+    private Map<Long, User> getUserMapByRoutes(List<Route> routes) {
+        if (routes == null || routes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Long> userIds = routes.stream()
+                .map(Route::getUserId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return userMapper.selectBatchIds(userIds)
+                .stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+    }
+
+    private Set<Long> getLikedRouteIds(List<Route> routes, Long userId) {
+        if (routes == null || routes.isEmpty() || userId == null) {
+            return Collections.emptySet();
+        }
+
+        List<Long> routeIds = routes.stream()
+                .map(Route::getId)
+                .filter(id -> id != null)
+                .collect(Collectors.toList());
+
+        if (routeIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        LambdaQueryWrapper<Like> likeWrapper = new LambdaQueryWrapper<>();
+        likeWrapper.eq(Like::getUserId, userId)
+                .in(Like::getRouteId, routeIds);
+
+        return likeMapper.selectList(likeWrapper).stream()
+                .map(Like::getRouteId)
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private RouteVO convertToVO(Route route, boolean liked) {
+        Map<Long, User> userMap = getUserMapByRoutes(Collections.singletonList(route));
+        return convertToVO(route, userMap, liked);
+    }
+
+    private RouteVO convertToVO(Route route, Map<Long, User> userMap, boolean liked) {
         RouteVO vo = new RouteVO();
         vo.setId(route.getId());
         vo.setUserId(route.getUserId());
@@ -348,7 +406,7 @@ public class CommunityServiceImpl implements CommunityService {
         vo.setUpdateTime(route.getUpdateTime());
 
         // 获取用户信息
-        User user = userMapper.selectById(route.getUserId());
+        User user = userMap.get(route.getUserId());
         if (user != null) {
             vo.setUsername(user.getUsername());
             vo.setNickname(user.getNickname());
