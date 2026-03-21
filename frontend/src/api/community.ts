@@ -1,31 +1,6 @@
-import axios from 'axios'
+import { createHttpClient } from './http'
 
-const API_BASE_URL = '/api'
-
-const request = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-})
-
-request.interceptors.request.use((config) => {
-  const token = localStorage.getItem('ridesketch_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
-request.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('ridesketch_token')
-      localStorage.removeItem('ridesketch_user_id')
-      window.location.href = '/'
-    }
-    return Promise.reject(error)
-  }
-)
+const request = createHttpClient(10000)
 
 interface RouteVO {
   id: number
@@ -186,14 +161,17 @@ export async function deleteRoute(id: number): Promise<void> {
   await request.delete<any>(`/community/route/${id}`)
 }
 
-export async function likeRoute(id: number): Promise<{ liked: boolean; likes: number }> {
+async function toggleLike(id: number): Promise<{ liked: boolean; likes: number }> {
   const response = await request.post<any>(`/community/route/${id}/like`)
   return response.data.data
 }
 
+export async function likeRoute(id: number): Promise<{ liked: boolean; likes: number }> {
+  return toggleLike(id)
+}
+
 export async function unlikeRoute(id: number): Promise<{ liked: boolean; likes: number }> {
-  const response = await request.post<any>(`/community/route/${id}/like`)
-  return response.data.data
+  return toggleLike(id)
 }
 
 export async function getComments(routeId: number): Promise<CommentInfo[]> {

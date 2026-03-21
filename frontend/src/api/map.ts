@@ -1,16 +1,11 @@
-import axios from 'axios'
 import type {
   AddressSearchResult,
   GeoCodeResult,
   ReGeoCodeResult,
 } from '@/types/map'
+import { createHttpClient } from './http'
 
-const API_BASE_URL = '/api'
-
-const request = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-})
+const request = createHttpClient(10000)
 
 /**
  * 地址搜索（关键词搜索POI）
