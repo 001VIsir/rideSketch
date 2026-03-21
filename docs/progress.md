@@ -1,5 +1,26 @@
 # 开发进度日志
 
+## 2026-03-17
+
+### dev_2 分支全项目优化重构（第二轮）
+
+- [x] 后端社区查询性能优化：`CommunityServiceImpl` 消除列表 N+1（批量用户/点赞映射）
+- [x] 后端健壮性增强：点赞取消路径增加下限保护，避免负数点赞
+- [x] 前端 API 层收敛：新增 `frontend/src/api/http.ts`，统一 token 注入与 401 处理
+- [x] 前端重复逻辑去重：`community.ts` 抽取 `toggleLike` 复用逻辑
+- [x] 新增测试：`CommunityServiceImplTest`（批量查询行为 + 点赞下限保护）
+- [x] 输出重构报告：`docs/dev_2_refactor_report_20260317.md`
+
+### 验证结果
+
+- 后端新增测试：`./mvnw.cmd test -Dtest=CommunityServiceImplTest` ✅（2 passed）
+- 后端全量测试：`./mvnw.cmd test` ✅（17 run, 0 fail）
+- 后端构建打包：`./mvnw.cmd clean package -DskipTests` ✅
+- 前端构建：`frontend npm run build` ✅
+- 前端测试脚本现状：`frontend` 当前无 `npm run test` 脚本（历史现状）
+
+---
+
 ## 2026-02-21
 
 ### RAG知识库完善
