@@ -1,11 +1,6 @@
-import axios from 'axios'
+import { createHttpClient } from './http'
 
-const API_BASE_URL = '/api'
-
-const request = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 180000,
-})
+const request = createHttpClient(180000)
 
 // 出行方式
 export type RouteMode = 'riding' | 'walking'

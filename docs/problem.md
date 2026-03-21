@@ -1,5 +1,108 @@
 # 问题与解决方案记录
 
+## 2026-03-17 dev_2 全项目重构：社区列表 N+1 与前端 API 重复封装治理
+
+### 1. 问题标题
+
+社区列表查询存在 N+1 性能问题，前端 API 客户端重复封装导致维护成本高。
+
+### 2. 现象与复现步骤
+
+#### 现象A（后端）
+- `CommunityServiceImpl#getRouteList` 在列表场景下对每条路线执行：
+  1) `hasLiked(routeId, userId)`
+  2) `userMapper.selectById(route.userId)`
+- 路线条数增长时，SQL 次数线性放大。
+
+#### 复现步骤A
+1. 打开 `src/main/java/org/example/ridesketch/service/impl/CommunityServiceImpl.java`
+2. 观察 `getRouteList` 的 `stream.map(convertToVO + hasLiked)` 路径
+3. 观察 `convertToVO` 内部再次 `selectById` 查询用户
+
+#### 现象B（前端）
+- `frontend/src/api/{map,route,community}.ts` 均重复创建 Axios 客户端与拦截器逻辑。
+- `community.ts` 的 `likeRoute/unlikeRoute` 完全重复调用路径。
+
+#### 复现步骤B
+1. 分别打开 `frontend/src/api/map.ts`、`route.ts`、`community.ts`
+2. 对比 `axios.create + interceptors` 代码块
+3. 对比 `likeRoute` 和 `unlikeRoute`
+
+### 3. 影响范围
+
+- 后端：社区列表、我的路线列表、路线详情的用户映射与点赞状态计算路径
+- 前端：地图、路线、社区 API 调用基础设施
+- 文档：开发进度与重构报告需要同步
+
+### 4. 根因分析
+
+1. 社区服务早期以“功能优先”方式落地，列表查询沿用了单条查询逻辑，未做批量化映射。
+2. 前端 API 模块按业务线独立开发，缺少统一 HTTP 客户端抽象，导致重复封装。
+3. 点赞接口语义为 toggle，但前端保留了 like/unlike 两个函数且实现重复。
+
+### 5. 方案对比（至少两个）
+
+#### 方案A：维持现状，仅补缓存
+- 优点：改动小
+- 缺点：根因未解；代码结构仍重复；缓存一致性复杂
+
+#### 方案B：后端批量查询 + 前端统一 HTTP 抽象（采用）
+- 优点：直接消除 N+1 与重复代码；可测试、可审计、回滚清晰
+- 缺点：涉及多文件改造，需要回归验证
+
+#### 方案C：后端改为 JOIN SQL 重写所有社区查询
+- 优点：性能潜力高
+- 缺点：侵入性大、回归风险高，不符合“低风险高收益优先”
+
+### 6. 最终方案与选择理由
+
+采用方案B：
+1. 后端在列表场景按批量维度一次查询用户与点赞集合，再做内存映射。
+2. 前端新增 `api/http.ts` 统一构建客户端，业务 API 模块仅保留领域方法。
+3. 通过新增单元测试锁定关键行为（批量加载 + 点赞下限保护）。
+
+选择理由：在不改变接口契约的前提下，收益明确、风险可控、回滚成本低。
+
+### 7. 详细处理过程（步骤化）
+
+1. 阶段0基线：执行 init、读取 `progress/feature_list/problem`、记录 `test/build` 基线。
+2. 阶段1分析：确认 P0（社区 N+1）与 P1（前端 API 重复封装）。
+3. 后端改造：
+   - 新增 `getUserMapByRoutes`
+   - 新增 `getLikedRouteIds`
+   - `getRouteList/getMyRoutes` 改为批量映射
+   - `toggleLike` 增加 `Math.max(0, likes-1)` 保护
+4. 测试补齐：新增 `CommunityServiceImplTest` 两个用例。
+5. 前端改造：
+   - 新增 `frontend/src/api/http.ts`
+   - `map.ts/route.ts/community.ts` 迁移到统一客户端
+   - `community.ts` 抽取 `toggleLike`
+6. 全量回归：后端全测、后端打包、前端构建。
+
+### 8. 验证结果与证据
+
+- `./mvnw.cmd test -Dtest=CommunityServiceImplTest` ✅（2/2）
+- `./mvnw.cmd test` ✅（17 tests, 0 fail）
+- `./mvnw.cmd clean package -DskipTests` ✅
+- `frontend npm run build` ✅
+- `frontend npm run test` ❌（无脚本，历史现状，已记录）
+
+### 9. 后续改进建议
+
+1. 为 frontend 增加统一 `test` 脚本，接入 Vitest 基线。
+2. 社区模块继续扩展分页总数与批量评论计数，进一步降低聚合开销。
+3. 引入 CI 流水线固化 `backend test + frontend build` 门禁。
+
+### 思考过程 / 分析路径（完整记录）
+
+1. 先验证真实基线而非主观判断：通过命令确认“当前能跑什么、哪里会失败”。
+2. 优先选 P0 且可局部闭环的问题：社区 N+1 具备高收益、低侵入特征。
+3. 重构策略坚持“行为不变、实现优化”：不改接口字段，不改调用语义。
+4. 对风险点采用测试锁定：先写能证明收益与边界的单元测试，再做全量回归。
+5. 前端改造遵循同样原则：先抽通用层，再最小替换业务模块。
+
+---
+
 ## 2026-03-08 图案路书“选了图案却画不对”二次修复
 
 ### 问题：图案路书在前端选择后仍可能生成错误形状或距离异常

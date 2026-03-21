@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Private docs (architecture/interview) ###
+docs/document.md
+docs/项目经历.md
+docs/*面试*.md
+docs/*interview*.md
