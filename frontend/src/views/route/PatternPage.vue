@@ -3,59 +3,77 @@
     <div class="pattern-content">
       <!-- 左侧：表单和结果 -->
       <div class="pattern-container">
-        <el-card class="pattern-card">
-          <template #header>
-            <div class="card-header">
-              <span>图案路书生成</span>
+        <div class="pattern-card">
+          <div class="card-header-section">
+            <div class="card-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="12 2 2 7 12 12 22 7 12 2" fill="#14b8a6"/>
+                <polyline points="2 17 12 22 22 17" stroke="#14b8a6" stroke-width="2" fill="none"/>
+                <polyline points="2 12 12 17 22 12" stroke="#14b8a6" stroke-width="2" fill="none"/>
+              </svg>
             </div>
-          </template>
+            <div class="card-title-group">
+              <h2 class="card-title">图案路书生成</h2>
+              <p class="card-subtitle">创造独特的骑行轨迹</p>
+            </div>
+          </div>
 
           <!-- 图案选择 -->
           <div class="pattern-section">
-            <el-form label-width="80px">
-              <el-form-item label="选择图案">
-                <div class="pattern-grid">
-                  <div
-                    v-for="pattern in patternOptions"
-                    :key="pattern.key"
-                    class="pattern-item"
-                    :class="{ selected: selectedPatternKey === pattern.key }"
-                    @click="selectedPatternKey = pattern.key"
-                  >
-                    <div class="pattern-icon">{{ pattern.icon }}</div>
-                    <div class="pattern-name">{{ pattern.name }}</div>
-                  </div>
+            <div class="section-label">选择图案</div>
+            <div class="pattern-grid">
+              <div
+                v-for="pattern in patternOptions"
+                :key="pattern.key"
+                class="pattern-item"
+                :class="{ selected: selectedPatternKey === pattern.key }"
+                @click="selectedPatternKey = pattern.key"
+              >
+                <div class="pattern-icon">{{ pattern.icon }}</div>
+                <div class="pattern-name">{{ pattern.name }}</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-item">
+                <label class="form-label">城市</label>
+                <el-input v-model="city" placeholder="如：北京" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-item">
+                <label class="form-label">骑行距离</label>
+                <div class="slider-wrapper">
+                  <el-slider v-model="distance" :min="1" :max="50" :marks="distanceMarks" />
+                  <span class="slider-value">{{ distance }} km</span>
                 </div>
-              </el-form-item>
+              </div>
+            </div>
 
-              <el-form-item label="城市">
-                <el-input v-model="city" placeholder="请输入城市名称，如：北京" />
-              </el-form-item>
-
-              <el-form-item label="距离(km)">
-                <el-slider v-model="distance" :min="1" :max="50" :marks="distanceMarks" />
-              </el-form-item>
-
-              <el-form-item label="路线描述">
+            <div class="form-row">
+              <div class="form-item">
+                <label class="form-label">路线描述</label>
                 <el-input
                   v-model="description"
                   type="textarea"
-                  :rows="3"
+                  :rows="2"
                   placeholder="描述你想要的骑行路线"
                 />
-              </el-form-item>
+              </div>
+            </div>
 
-              <el-form-item>
-                <el-button
-                  type="primary"
-                  :loading="loading"
-                  class="generate-button"
-                  @click="handleGenerate"
-                >
-                  生成路书
-                </el-button>
-              </el-form-item>
-            </el-form>
+            <el-button
+              type="primary"
+              :loading="loading"
+              class="generate-button"
+              @click="handleGenerate"
+            >
+              <svg v-if="!loading" class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              生成路书
+            </el-button>
           </div>
 
           <!-- 结果展示 -->
@@ -100,24 +118,22 @@
               </div>
             </div>
           </div>
-        </el-card>
+        </div>
       </div>
 
       <!-- 右侧：地图预览 -->
       <div v-if="result" class="map-container">
-        <el-card class="map-card">
-          <template #header>
-            <div class="card-header">
-              <span>地图预览</span>
-              <el-button
-                size="small"
-                :disabled="!result?.routePaths?.length && !result?.routePath"
-                @click="handleViewOnMap(result?.routePaths?.[0] ?? null)"
-              >
-                全屏查看
-              </el-button>
-            </div>
-          </template>
+        <div class="map-card">
+          <div class="map-card-header">
+            <span class="map-title">地图预览</span>
+            <el-button
+              size="small"
+              :disabled="!result?.routePaths?.length && !result?.routePath"
+              @click="handleViewOnMap(result?.routePaths?.[0] ?? null)"
+            >
+              全屏查看
+            </el-button>
+          </div>
           <div class="map-wrapper">
             <Amap
               ref="amapRef"
@@ -125,7 +141,7 @@
               :zoom="14"
             />
           </div>
-        </el-card>
+        </div>
       </div>
     </div>
   </div>
@@ -144,10 +160,8 @@ const router = useRouter()
 const routeStore = useRouteStore()
 const amapRef = ref()
 
-// 地图中心点
 const mapCenter = ref<[number, number]>([116.397428, 39.90923])
 
-// 图案选项
 const patternOptions = [
   { key: 'heart', name: '爱心', icon: '❤️', pattern: '心形', patternType: 'shape' as const },
   { key: 'star', name: '星星', icon: '⭐', pattern: '五角星', patternType: 'shape' as const },
@@ -161,14 +175,12 @@ const patternOptions = [
 
 const defaultPatternOption = patternOptions[0]!
 
-// 表单数据
 const selectedPatternKey = ref(defaultPatternOption.key)
 const city = ref('')
 const distance = ref(10)
 const description = ref('')
 const loading = ref(false)
 
-// 结果
 const result = ref<{
   pattern: string
   city: string
@@ -179,18 +191,15 @@ const result = ref<{
   routePath?: string
 } | null>(null)
 
-// 监听结果变化，绘制地图
 watch(result, async (newResult) => {
   if (newResult && newResult.routePath) {
     await nextTick()
-    // 延迟一下等待地图加载
     setTimeout(() => {
       drawPatternRoute(newResult)
     }, 500)
   }
 }, { immediate: false })
 
-// 距离标记
 const distanceMarks = {
   1: '1km',
   10: '10km',
@@ -198,7 +207,6 @@ const distanceMarks = {
   50: '50km',
 }
 
-// 生成路书
 async function handleGenerate() {
   if (!city.value.trim()) {
     ElMessage.warning('请输入城市名称')
@@ -213,7 +221,6 @@ async function handleGenerate() {
       pattern: selectedPattern.pattern,
       patternType: selectedPattern.patternType,
       city: city.value,
-      // 距离滑块映射到后端稳定可控区间，避免图案过大/过小导致形状异常
       scale: Math.max(0.005, Math.min(0.2, distance.value / 200)),
       description: description.value || undefined,
     })
@@ -229,7 +236,6 @@ async function handleGenerate() {
     const routePaths = data.routeData?.route?.paths || []
     const patternPointCount = data.patternPoints?.length || 0
 
-    // 获取图案点
     const patternPoints = data.patternPoints || []
     const routePath = data.routePath || ''
 
@@ -243,7 +249,6 @@ async function handleGenerate() {
       routePath,
     }
 
-    // 设置地图中心点为第一个图案点或城市中心
     const firstPoint = patternPoints[0]
     if (firstPoint) {
       mapCenter.value = [firstPoint.longitude, firstPoint.latitude]
@@ -258,7 +263,6 @@ async function handleGenerate() {
   }
 }
 
-// 在地图上绘制图案路线
 async function drawPatternRoute(routeData: typeof result.value) {
   if (!routeData) return
 
@@ -269,14 +273,11 @@ async function drawPatternRoute(routeData: typeof result.value) {
       return
     }
 
-    // 清除之前的路线
     clearRoute()
 
-    // 如果有路线数据，使用路线数据
     let pathPoints: [number, number][] = []
-    
+
     if (routeData.routePath) {
-      // 解析路径坐标
       const coordStrings = routeData.routePath.split(';')
       for (const coord of coordStrings) {
         const parts = coord.split(',')
@@ -289,24 +290,20 @@ async function drawPatternRoute(routeData: typeof result.value) {
         }
       }
     }
-    
-    // 如果没有路线数据，使用图案点数据
+
     if (pathPoints.length === 0 && routeData.patternPoints && routeData.patternPoints.length > 0) {
       pathPoints = routeData.patternPoints.map(p => [p.longitude, p.latitude] as [number, number])
     }
 
     if (pathPoints.length > 0) {
-      // 绘制路线
-      await drawRoute(pathPoints, '#ff6b6b')
+      await drawRoute(pathPoints, '#14b8a6')
 
-      // 绘制图案点作为标记
       if (routeData.patternPoints && routeData.patternPoints.length > 0) {
         routeData.patternPoints.forEach((point, index) => {
           addMarker([point.longitude, point.latitude], String(index + 1), `点 ${index + 1}`)
         })
       }
 
-      // 调整地图视野
       map.setFitView()
     }
   } catch (error) {
@@ -314,7 +311,6 @@ async function drawPatternRoute(routeData: typeof result.value) {
   }
 }
 
-// 在地图上查看
 function handleViewOnMap(path: PathInfo | null) {
   const effectivePath = path ?? (result.value?.routePath
     ? {
@@ -348,109 +344,190 @@ function handleViewOnMap(path: PathInfo | null) {
 <style scoped>
 .pattern-page {
   min-height: 100vh;
-  padding: 40px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px;
+  background: #f8fafc;
 }
 
 .pattern-content {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   max-width: 1400px;
   margin: 0 auto;
 }
 
 .pattern-container {
-  flex: 0 0 400px;
-}
-
-.map-container {
-  flex: 1;
-}
-
-.map-card {
-  height: 100%;
-  min-height: 600px;
-}
-
-.map-card :deep(.el-card__body) {
-  height: calc(100% - 55px);
-}
-
-.map-wrapper {
-  width: 100%;
-  height: 100%;
-  min-height: 500px;
-  border-radius: 8px;
-  overflow: hidden;
+  flex: 0 0 420px;
 }
 
 .pattern-card {
-  border-radius: 12px;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 
-.card-header {
+.card-header-section {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-size: 18px;
-  font-weight: 600;
+  gap: 16px;
+  padding: 24px;
+  background: linear-gradient(135deg, #f0fdfa 0%, #faf5f0 100%);
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.card-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.card-subtitle {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
 }
 
 .pattern-section {
-  padding: 20px 0;
+  padding: 24px;
+}
+
+.section-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 12px;
 }
 
 .pattern-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
 .pattern-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 8px;
-  border: 2px solid #dcdfe6;
-  border-radius: 8px;
+  padding: 14px 8px;
+  border: 2px solid #f1f5f9;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s ease;
 }
 
 .pattern-item:hover {
-  border-color: #409eff;
+  border-color: #14b8a6;
+  background: #f0fdfa;
 }
 
 .pattern-item.selected {
-  border-color: #409eff;
-  background-color: #ecf5ff;
+  border-color: #14b8a6;
+  background: #f0fdfa;
 }
 
 .pattern-icon {
-  font-size: 28px;
-  margin-bottom: 8px;
+  font-size: 24px;
+  margin-bottom: 6px;
 }
 
 .pattern-name {
-  font-size: 13px;
-  color: #606266;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slider-wrapper :deep(.el-slider) {
+  flex: 1;
+}
+
+.slider-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #14b8a6;
+  min-width: 50px;
 }
 
 .generate-button {
   width: 100%;
-  margin-top: 16px;
+  height: 48px;
+  border-radius: 12px !important;
+  font-size: 16px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.25);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.generate-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(20, 184, 166, 0.35);
+}
+
+.btn-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .result-section {
-  padding: 20px 0;
+  padding: 0 24px 24px;
+}
+
+.result-section :deep(.el-divider) {
+  margin: 0 -24px 24px;
 }
 
 .result-info {
-  display: flex;
-  justify-content: space-around;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
   padding: 20px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: #f8fafc;
+  border-radius: 12px;
   margin-bottom: 20px;
 }
 
@@ -458,37 +535,38 @@ function handleViewOnMap(path: PathInfo | null) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .info-label {
   font-size: 12px;
-  color: #909399;
+  color: #94a3b8;
 }
 
 .info-value {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: #1e293b;
 }
 
 .route-details {
   padding: 16px;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #ebeef5;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
 }
 
 .details-header {
   font-size: 14px;
   font-weight: 500;
+  color: #475569;
   margin-bottom: 12px;
 }
 
 .path-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .path-item {
@@ -496,14 +574,48 @@ function handleViewOnMap(path: PathInfo | null) {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #f5f7fa;
-  border-radius: 6px;
+  background: #f8fafc;
+  border-radius: 8px;
 }
 
 .path-info {
   display: flex;
   gap: 16px;
   font-size: 13px;
-  color: #606266;
+  color: #64748b;
+}
+
+.map-container {
+  flex: 1;
+}
+
+.map-card {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  height: 100%;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.map-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.map-wrapper {
+  flex: 1;
+  min-height: 500px;
 }
 </style>
