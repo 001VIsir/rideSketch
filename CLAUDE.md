@@ -152,6 +152,20 @@ Frontend Amap key configured in `frontend/src/utils/amap.ts`.
 
 ## Development Workflow
 
+### PDR Workflow (强制执行)
+
+当使用 `/pdr` 命令时，**必须**使用专业 agent 执行各阶段：
+
+| 阶段 | Agent | 模型 |
+|------|-------|------|
+| Phase 1: PLAN | `planner` agent | K2.6-code-preview |
+| Phase 2: DEVELOP | `developer` agent | MiniMax-M2.7 |
+| Phase 3: REVIEW | `reviewer` agent | K2.6-code-preview |
+
+**禁止**在 PDR 流程中跳过 agent 直接执行代码。所有阶段必须按顺序执行，不得省略。
+
+### 通用开发流程
+
 1. Check `docs/feature_list.md` for pending features
 2. Read `docs/problem.md` to understand known issues and patterns
 3. Implement following existing code patterns

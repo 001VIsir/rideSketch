@@ -3,26 +3,26 @@
     <div class="map-container">
       <!-- 顶部功能栏 -->
       <div class="top-bar">
-        <!-- 搜索栏 -->
-        <div class="search-bar">
-          <el-input
-            v-model="searchKeyword"
-            placeholder="搜索地址/POI"
-            class="search-input"
-            @keyup.enter="handleSearch"
-          >
-            <template #append>
-              <el-button :icon="Search" @click="handleSearch" />
-            </template>
-          </el-input>
-        </div>
+        <div class="search-section">
+          <div class="search-bar">
+            <el-input
+              v-model="searchKeyword"
+              placeholder="搜索地址/POI"
+              class="search-input"
+              @keyup.enter="handleSearch"
+            >
+              <template #append>
+                <el-button :icon="Search" @click="handleSearch" />
+              </template>
+            </el-input>
+          </div>
 
-        <!-- 功能切换 -->
-        <div class="function-tabs">
-          <el-radio-group v-model="activeFunction" @change="handleFunctionChange">
-            <el-radio-button value="search">搜索</el-radio-button>
-            <el-radio-button value="route">路线规划</el-radio-button>
-          </el-radio-group>
+          <div class="function-tabs">
+            <el-radio-group v-model="activeFunction" @change="handleFunctionChange">
+              <el-radio-button value="search">搜索</el-radio-button>
+              <el-radio-button value="route">路线规划</el-radio-button>
+            </el-radio-group>
+          </div>
         </div>
       </div>
 
@@ -71,7 +71,6 @@
       <div class="sidebar">
         <!-- 搜索功能面板 -->
         <template v-if="activeFunction === 'search'">
-          <!-- 搜索结果面板 -->
           <div v-if="mapStore.searchResults.length > 0" class="search-results-panel">
             <el-card shadow="hover">
               <template #header>
@@ -135,7 +134,6 @@ const mapStore = useMapStore()
 const routeStore = useRouteStore()
 const searchKeyword = ref('')
 
-// 搜索地址 - 直接使用高德JS API
 async function handleSearch() {
   if (!searchKeyword.value.trim()) {
     ElMessage.warning('请输入搜索关键词')
@@ -144,11 +142,9 @@ async function handleSearch() {
 
   mapStore.setSearching(true)
   try {
-    // 直接使用前端的高德JS API进行搜索
     const { placeSearch: amapPlaceSearch, loadAMap } = await import('@/utils/amap')
-    await loadAMap() // 确保地图已加载
+    await loadAMap()
 
-    // 获取当前城市
     let city = '北京'
     try {
       const { reGeocode } = await import('@/utils/amap')
@@ -165,10 +161,8 @@ async function handleSearch() {
       console.warn('获取城市失败，使用默认北京')
     }
 
-    // 使用高德JS API搜索
     let pois = await amapPlaceSearch(searchKeyword.value, city)
 
-    // 如果前端JS API不可用，回退到后端搜索接口
     if (!pois || pois.length === 0) {
       const backendResult = await searchAddress(searchKeyword.value, city)
       if (backendResult?.status === '1' && backendResult.pois?.length > 0) {
@@ -178,7 +172,6 @@ async function handleSearch() {
 
     if (pois && pois.length > 0) {
       mapStore.setSearchResults(pois)
-      // 优先选择名称包含关键词的结果
       const keyword = searchKeyword.value.toLowerCase()
       const firstPoi = pois.find(p =>
         p.name && p.name.toLowerCase().includes(keyword)
@@ -203,14 +196,11 @@ async function handleSearch() {
   }
 }
 
-// 处理地图点击
 async function handleMapClick(lng: number, lat: number) {
-  // 搜索模式
   if (mapStore.isPickingMode) {
     mapStore.setSelectedLocation(lng, lat)
     mapStore.isPickingMode = false
 
-    // 获取地址信息
     try {
       const { reGeocode } = await import('@/utils/amap')
       const address = await reGeocode(lng, lat)
@@ -225,13 +215,11 @@ async function handleMapClick(lng: number, lat: number) {
     return
   }
 
-  // 路线规划模式
   if (activeFunction.value === 'route') {
     await handleRouteMapClick(lng, lat)
   }
 }
 
-// 处理搜索结果选择
 function handleSelectResult(item: PoiInfo) {
   const lng = parseFloat(item.longitude)
   const lat = parseFloat(item.latitude)
@@ -240,19 +228,15 @@ function handleSelectResult(item: PoiInfo) {
   mapStore.clearSearchResults()
 }
 
-// 地图加载完成
 function handleMapLoad() {
   mapStore.setMapLoaded(true)
-  console.log('地图加载完成')
 }
 
-// 路线相关状态
 const activeFunction = ref<'search' | 'route'>('search')
 const routeTab = ref('normal')
 const routePanelRef = ref()
 const markerMode = ref<'origin' | 'destination' | 'waypoint' | null>(null)
 
-// 切换功能
 function handleFunctionChange(value: string) {
   activeFunction.value = value as 'search' | 'route'
   if (value === 'search') {
@@ -260,28 +244,22 @@ function handleFunctionChange(value: string) {
   }
 }
 
-// 切换路线面板显示
 function toggleRoutePanel() {
   if (activeFunction.value !== 'route') {
     activeFunction.value = 'route'
   }
 }
 
-// 清除路线
 function handleClearRoute() {
-  // 清除路线数据
   routeStore.clearAll()
-  // 清除地图上的路线和标记
   clearRoute()
   ElMessage.success('路线已清除')
 }
 
-// 绘制路线
 async function drawRouteOnMap(path: PathInfo) {
   const map = getMapInstance()
   if (!map || !path.path) return
 
-  // 解析路径坐标
   const pathPoints: [number, number][] = []
   const coordStrings = path.path.split(';')
   for (const coord of coordStrings) {
@@ -295,29 +273,23 @@ async function drawRouteOnMap(path: PathInfo) {
     }
   }
 
-  // 绘制路线
-  await drawRoute(pathPoints, '#409eff')
+  await drawRoute(pathPoints, '#14b8a6')
 
-  // 如果有起点，添加标记
   if (routeStore.origin) {
     addMarker([routeStore.origin.lng, routeStore.origin.lat], 'A', '起点')
   }
-  // 如果有终点，添加标记
   if (routeStore.destination) {
     addMarker([routeStore.destination.lng, routeStore.destination.lat], 'B', '终点')
   }
 
-  // 调整地图视野以显示完整路线
   if (pathPoints.length > 0) {
     map.setFitView()
   }
 }
 
-// 处理地图点击（路线规划模式）
 async function handleRouteMapClick(lng: number, lat: number) {
   if (activeFunction.value !== 'route') return
 
-  // 获取地址信息
   let address = ''
   try {
     const { reGeocode } = await import('@/utils/amap')
@@ -340,7 +312,6 @@ async function handleRouteMapClick(lng: number, lat: number) {
   }
 }
 
-// 监听RoutePanel的焦点变化
 watch(() => routePanelRef.value?.inputFocus, (focus) => {
   if (focus) {
     markerMode.value = focus
@@ -348,7 +319,6 @@ watch(() => routePanelRef.value?.inputFocus, (focus) => {
   }
 })
 
-// 监听路线结果变化，自动绘制路线
 watch(() => routeStore.selectedPath, (path) => {
   if (path) {
     drawRouteOnMap(path)
@@ -356,7 +326,6 @@ watch(() => routeStore.selectedPath, (path) => {
 })
 
 onMounted(() => {
-  // 设置默认中心点为北京
   mapStore.setCenter(116.397428, 39.90923)
 })
 </script>
@@ -366,6 +335,7 @@ onMounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background: #f8fafc;
 }
 
 .map-container {
@@ -375,22 +345,58 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.search-bar {
+.top-bar {
   display: flex;
-  gap: 10px;
-  padding: 16px;
-  background: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   z-index: 10;
 }
 
+.search-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+}
+
 .search-input {
-  max-width: 400px;
+  width: 320px;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  border-radius: 10px 0 0 10px !important;
+}
+
+.search-input :deep(.el-input-group__append) {
+  border-radius: 0 10px 10px 0 !important;
+  background: #14b8a6;
+  border-color: #14b8a6;
+  color: white;
+}
+
+.function-tabs :deep(.el-radio-button__inner) {
+  border-radius: 8px !important;
+}
+
+.function-tabs :deep(.el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: 8px !important;
+}
+
+.function-tabs :deep(.el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 8px !important;
 }
 
 .map-wrapper {
   flex: 1;
   position: relative;
+  background: #f1f5f9;
 }
 
 .location-panel {
@@ -401,28 +407,28 @@ onMounted(() => {
   width: 280px;
 }
 
+.location-panel :deep(.el-card) {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-weight: 500;
 }
 
 .location-info p {
   margin: 8px 0;
   font-size: 14px;
+  color: #475569;
 }
 
 .location-info strong {
-  color: #409eff;
-}
-
-.search-results {
-  position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
-  max-height: 300px;
-  z-index: 10;
+  color: #14b8a6;
+  font-weight: 500;
 }
 
 .results-list {
@@ -432,13 +438,13 @@ onMounted(() => {
 
 .result-item {
   padding: 12px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #f1f5f9;
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .result-item:hover {
-  background-color: #f5f7fa;
+  background-color: #f0fdfa;
 }
 
 .result-item:last-child {
@@ -448,54 +454,49 @@ onMounted(() => {
 .result-name {
   font-size: 14px;
   font-weight: 500;
-  color: #303133;
+  color: #1e293b;
   margin-bottom: 4px;
 }
 
 .result-address {
   font-size: 12px;
-  color: #909399;
+  color: #94a3b8;
 }
 
-/* 顶部功能栏 */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-}
-
-.function-tabs {
-  display: flex;
-  gap: 12px;
-}
-
-/* 侧边栏 */
 .sidebar {
   position: absolute;
-  top: 70px;
-  left: 16px;
-  bottom: 16px;
+  top: 80px;
+  left: 24px;
+  bottom: 24px;
   width: 360px;
   z-index: 10;
   overflow-y: auto;
 }
 
-.search-results-panel {
-  max-height: 400px;
+.search-results-panel :deep(.el-card) {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .route-tabs {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.route-tabs :deep(.el-tabs__header) {
+  margin: 0;
+}
+
+.route-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
 }
 
 .route-tabs :deep(.el-tabs__content) {
   max-height: 500px;
   overflow-y: auto;
+  padding: 16px;
 }
 </style>
